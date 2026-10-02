@@ -1545,7 +1545,27 @@ function buildRig(three: T3, spec: Spec): Rig {
   let glasses: TGroup | null = null;
   if (spec.glasses !== 'none') {
     glasses = buildGlasses(kit, spec.glasses, eyeX, Math.max(0.85, spec.eyeSize), spec.glassesColor);
-    if (glasses) place(glasses, cx, eyeY, 0.05);
+    if (glasses) {
+      place(glasses, cx, eyeY, 0.05);
+      // Glasses go in front of whatever sits under the lenses. Measured from
+      // the face centre alone, they sink behind the eyes and cheeks wherever
+      // the face dips between them (the heart's cleft).
+      face.updateWorldMatrix(true, true);
+      const toFace = face.matrixWorld.clone().invert();
+      const inFace = (object: TObject) => new three.Box3().setFromObject(object).applyMatrix4(toFace);
+      const lenses = inFace(glasses);
+      let front = -Infinity;
+      for (const child of face.children) {
+        if (child === glasses) continue;
+        const box = inFace(child);
+        if (box.max.x < lenses.min.x || box.min.x > lenses.max.x) continue;
+        if (box.max.y < lenses.min.y || box.min.y > lenses.max.y) continue;
+        front = Math.max(front, box.max.z);
+      }
+      // Clearance for the fur on fuzzy parts, which the boxes don't include.
+      glasses.position.z += Math.max(0, front + 0.03 - lenses.min.z);
+      floaters[floaters.length - 1].rest = glasses.position.z;
+    }
   }
   if (spec.bowtie) {
     const tie = buildBowtie(kit, spec.bowtieColor);
