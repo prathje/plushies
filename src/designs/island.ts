@@ -23,6 +23,10 @@ const CSS = `
   box-shadow: 0 10px 28px rgba(0,0,0,.28), 0 1px 3px rgba(0,0,0,.2), inset 0 0 0 1px rgba(255,255,255,.09);
   transition: width .46s cubic-bezier(.32, 1.25, .45, 1), height .46s cubic-bezier(.32, 1.25, .45, 1), border-radius .3s, padding .3s; }
 .pc-island .pc-box.is-open { border-radius: 20px; padding: 7px 14px 8px 7px; }
+.pc-bare .pc-island .pc-seat { display: none; }
+.pc-bare .pc-island .pc-box { padding-left: 12px; }
+.pc-bare .pc-island .pc-box.is-open { padding-left: 14px; }
+.pc-bare .pc-island .pc-col { min-height: 0; }
 .pc-island .pc-inner { display: flex; align-items: center; gap: 9px; width: max-content; }
 .pc-island .is-open .pc-inner { align-items: flex-start; }
 .pc-island .pc-seat { position: relative; flex: none; width: ${SEAT}px; height: ${SEAT}px; border-radius: 50%;

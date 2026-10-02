@@ -48,3 +48,33 @@ test('switching design keeps the helpers', async () => {
   expect(await tab.$$eval('.pc-cursor', els => els.length)).toBe(3);
   await tab.close();
 }, 40000);
+
+test('plushies are optional', async () => {
+  const tab = await browser.newPage();
+  const errors: string[] = [];
+  tab.on('pageerror', e => errors.push(e.message));
+  await tab.goto(`${server.url}?design=live`);
+  await tab.waitForFunction(() => document.querySelectorAll('.pc-cursor canvas').length === 3, null, {timeout: 20000});
+  await tab.click('#plushies');
+  await tab.waitForFunction(() => document.querySelectorAll('.pc-cursor canvas').length === 0, null, {timeout: 5000});
+  expect(await tab.$$eval('.pc-cursor.pc-bare', els => els.length)).toBe(3);
+  // Designs switch fine without them, and they come back.
+  await tab.click('[data-design=island]');
+  await tab.waitForTimeout(1500);
+  expect(await tab.$$eval('.pc-cursor canvas', els => els.length)).toBe(0);
+  await tab.click('#plushies');
+  await tab.waitForFunction(() => document.querySelectorAll('.pc-island .pc-seat canvas').length === 3, null, {timeout: 10000});
+  expect(errors).toEqual([]);
+  await tab.close();
+}, 40000);
+
+test('the plushie is a per-cursor flag', async () => {
+  const tab = await browser.newPage();
+  await tab.goto(`${server.url}?design=live`);
+  await tab.waitForFunction(() => document.querySelectorAll('.pc-cursor canvas').length === 3, null, {timeout: 20000});
+  await tab.selectOption('#who', '1');
+  await tab.click('#own-plushie');
+  await tab.waitForFunction(() => document.querySelectorAll('.pc-cursor canvas').length === 2, null, {timeout: 5000});
+  expect(await tab.$$eval('.pc-cursor.pc-bare', els => els.map(e => (e as HTMLElement).dataset.cursor))).toEqual(['Biscuit']);
+  await tab.close();
+}, 40000);

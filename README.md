@@ -32,6 +32,14 @@ glow.clear(0.8);
 
 Switch a cursor's design at any time with `cursor.setDesign('island')`.
 
+## Without a plushie
+
+The plushie is optional for each cursor:
+
+- **`plushie: false`** when creating a cursor leaves just the pointer and its label (in `live`, exactly the editor's cursor).
+- **`cursor.setPlushie(on)`** turns it off or back on later.
+- **`null` for `three`** (`createPlushieCursor(null, {name: 'Agent'})`) leaves out three.js entirely.
+
 ## API
 
 - **`moveTo(x, y)`**: glides to a point and resolves when it arrives. Positions are in the container's pixels.

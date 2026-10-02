@@ -11,6 +11,9 @@
  *   await pip.click();
  *   await pip.done('Headline updated');
  *
+ * The plushie is optional, per cursor: `plushie: false` (or setPlushie)
+ * leaves the pointer and its label; with `three` null it never loads.
+ *
  * Positions are pixels in the container (its padding box, scrolling with its
  * content). Moves are springs: `moveTo`/`pointAt` resolve on arrival. Three
  * designs: 'live' (VideoZero's live editor cursors), 'buddy' (a plushie on a
@@ -56,6 +59,8 @@ export interface PlushieCursorOptions {
   y?: number;
   /** The plushie blinks, breathes and glances around between moves. (default: true) */
   idle?: boolean;
+  /** Float a plushie with the pointer. False: just the pointer and its label. (default: true) */
+  plushie?: boolean;
 }
 
 export interface HighlightOptions {
@@ -74,8 +79,8 @@ export interface Highlight {
 
 export interface PlushieCursor {
   readonly element: HTMLElement;
-  /** The plushie's viewer: hop, squish, look, restyle, … */
-  readonly viewer: PlushieViewer;
+  /** The plushie's viewer: hop, squish, look, restyle, … (null without a plushie) */
+  readonly viewer: PlushieViewer | null;
   readonly design: CursorDesign;
   /** Glide to x, y (container pixels). Resolves on arrival. */
   moveTo(x: number, y: number): Promise<void>;
@@ -101,6 +106,8 @@ export interface PlushieCursor {
   highlight(target: Target, options?: HighlightOptions): Highlight;
   setDesign(design: CursorDesign): void;
   setName(name: string): void;
+  /** Show or drop the plushie (the pointer and label stay). */
+  setPlushie(on: boolean): void;
   show(on: boolean): void;
   dispose(): void;
 }
@@ -118,6 +125,7 @@ const LAYER_CSS = `
 .pc-body { position: absolute; left: 0; top: 0; width: 0; height: 0; will-change: transform; }
 .pc-plush { position: absolute; }
 .pc-plush > canvas { pointer-events: none; }
+.pc-cursor.pc-bare .pc-plush, .pc-cursor.pc-bare .pc-glint, .pc-cursor.pc-bare .pc-string { display: none; }
 .pc-part { position: absolute; left: 0; top: 0; transform-origin: 0 0; transition: scale .22s cubic-bezier(.65, 0, .35, 1), transform .12s; }
 .pc-flip-x .pc-part { scale: -1 1; }
 .pc-flip-y .pc-part { scale: 1 -1; }
@@ -305,7 +313,7 @@ const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v
 class CursorState {
   readonly element: HTMLElement;
   design!: Design;
-  viewer!: PlushieViewer;
+  viewer: PlushieViewer | null = null;
   private layer: Layer;
   private tip: Spring;
   private body: Spring | null = null;
@@ -322,7 +330,7 @@ class CursorState {
   private disposed = false;
 
   constructor(
-    private three: ThreeModule,
+    private three: ThreeModule | null,
     private options: PlushieCursorOptions,
   ) {
     this.layer = layerOf(options.container ?? document.body);
@@ -346,13 +354,22 @@ class CursorState {
 
   mount(kind: CursorDesign) {
     this.viewer?.dispose();
+    this.viewer = null;
     this.design?.dispose();
     this.design = DESIGNS[kind]();
     this.element.dataset.design = kind;
     this.element.append(this.design.root);
     this.body = null;
     this.flip = undefined;
-    // The plushie: no ground shadow, little headroom — it floats.
+    this.mountPlushie();
+    this.design.render(this.view);
+  }
+
+  /** The plushie: no ground shadow, little headroom — it floats. */
+  private mountPlushie() {
+    const on = this.options.plushie !== false && !!this.three;
+    this.element.classList.toggle('pc-bare', !on);
+    if (!on || !this.three || this.viewer) return;
     this.viewer = mountPlushie(this.design.plushHost, this.three, {
       shadow: false,
       headroom: 0.08,
@@ -360,7 +377,15 @@ class CursorState {
       idle: this.options.idle !== false,
     });
     this.plushSize = this.design.plushHost.offsetWidth || 48;
-    this.design.render(this.view);
+  }
+
+  setPlushie(on: boolean) {
+    this.options = {...this.options, plushie: on};
+    if (!on) {
+      this.viewer?.dispose();
+      this.viewer = null;
+    }
+    this.mountPlushie();
   }
 
   private render() {
@@ -413,6 +438,7 @@ class CursorState {
    * looks at what it points at, and wobbles while it works.
    */
   private pose(box: Box | null, now: number) {
+    if (!this.viewer) return;
     const body = this.body!;
     const size = this.plushSize;
     const busy = !!this.view.status && this.view.status.busy !== false;
@@ -481,13 +507,15 @@ class CursorState {
   }
 
   /** Run a squash-and-stretch gesture with the idle loop out of its way. */
-  private async gesture(run: () => Promise<void>) {
+  private async gesture(run: (viewer: PlushieViewer) => Promise<void>) {
+    const viewer = this.viewer;
+    if (!viewer) return;
     this.gestures++;
-    this.viewer.setIdle(false);
+    viewer.setIdle(false);
     try {
-      await run();
+      await run(viewer);
     } finally {
-      if (--this.gestures === 0 && !this.disposed && this.options.idle !== false) this.viewer.setIdle(true);
+      if (--this.gestures === 0 && this.viewer === viewer && this.options.idle !== false) viewer.setIdle(true);
     }
   }
 
@@ -500,7 +528,7 @@ class CursorState {
     ripple.style.top = `${this.tip.y}px`;
     setTimeout(() => ripple.remove(), 600);
     setTimeout(() => this.element.classList.remove('pc-pressed'), 140);
-    await this.gesture(() => this.viewer.squish(0.35, 0.5));
+    await this.gesture(viewer => viewer.squish(0.35, 0.5));
   }
 
   async done(text = 'Done', seconds = 1.8) {
@@ -512,16 +540,16 @@ class CursorState {
       this.view.done = null;
       this.render();
     }, seconds * 1000);
-    await this.gesture(() => this.jump(this.design.motion.hop));
+    await this.gesture(viewer => this.jump(viewer, this.design.motion.hop));
   }
 
   /**
    * A happy jump. The plushie's own hop would leave its small canvas, so the
    * canvas jumps instead (in CSS) while the plushie squashes and stretches.
    */
-  private async jump(height: number) {
+  private async jump(viewer: PlushieViewer, height: number) {
     const host = this.design.plushHost;
-    const to = this.viewer.to;
+    const to = viewer.to;
     await to({squash: 0.4}, 0.16, easeOut);
     if (height) {
       host.animate(
@@ -592,14 +620,17 @@ class CursorState {
     live.delete(this);
     clearTimeout(this.sayTimer);
     clearTimeout(this.doneTimer);
-    this.viewer.dispose();
+    this.viewer?.dispose();
     this.design.dispose();
     this.element.remove();
   }
 }
 
-/** Create a plushie cursor in `options.container` (default: the page). */
-export function createPlushieCursor(three: ThreeModule, options: PlushieCursorOptions): PlushieCursor {
+/**
+ * Create a plushie cursor in `options.container` (default: the page). Pass
+ * `null` for `three` to use only the pointer and label, without three.js.
+ */
+export function createPlushieCursor(three: ThreeModule | null, options: PlushieCursorOptions): PlushieCursor {
   const state = new CursorState(three, options);
   return {
     element: state.element,
@@ -622,6 +653,7 @@ export function createPlushieCursor(three: ThreeModule, options: PlushieCursorOp
       if (kind !== state.design.kind) state.mount(kind);
     },
     setName: name => state.setName(name),
+    setPlushie: on => state.setPlushie(on),
     show: on => state.element.classList.toggle('pc-hidden', !on),
     dispose: () => state.dispose(),
   };

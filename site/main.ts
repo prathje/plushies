@@ -296,6 +296,12 @@ $('#pause').addEventListener('click', event => {
   (event.currentTarget as HTMLButtonElement).textContent = paused ? 'Play' : 'Pause';
 });
 
+// Plushies are optional: without them it's just the pointer and its label.
+const plushies = $<HTMLInputElement>('#plushies');
+plushies.addEventListener('change', () => {
+  for (const h of helpers) h.cursor.setPlushie(plushies.checked);
+});
+
 // Pip follows the mouse: offset a little, so it's beside your pointer rather than on it.
 const follow = $<HTMLInputElement>('#follow');
 const onMove = (event: PointerEvent) => {
@@ -314,6 +320,10 @@ follow.addEventListener('change', () => {
 // Playground.
 const who = $<HTMLSelectElement>('#who');
 helpers.forEach((h, i) => who.add(new Option(h.name, String(i))));
+// Per cursor: this helper alone with or without its plushie.
+const ownPlushie = $<HTMLInputElement>('#own-plushie');
+who.addEventListener('change', () => (ownPlushie.checked = !!helpers[Number(who.value)].cursor.element.querySelector('canvas')));
+ownPlushie.addEventListener('change', () => helpers[Number(who.value)].cursor.setPlushie(ownPlushie.checked));
 const held = () => {
   const h = helpers[Number(who.value)];
   h.manual = true;
