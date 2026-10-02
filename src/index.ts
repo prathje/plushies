@@ -671,33 +671,44 @@ float plushHash(vec3 p) {
   p += dot(p, p.zyx + 31.32);
   return fract((p.x + p.y) * p.z);
 }
-// One jittered strand per lattice cell; returns its height (0 = no strand here).
+// One jittered strand per lattice cell: (coverage of this pixel, strand height).
 // The strand is a cylinder along the surface normal, so its radius is measured
 // in the tangent plane — measured in 3D, every place where the surface crosses
 // a cell boundary would read as "between strands" and draw a bald contour line.
-float plushStrand(vec3 q, float t, vec3 n) {
+// Its edge is blurred over one pixel (px = cells per pixel), not cut.
+vec2 plushStrand(vec3 q, float t, vec3 n, float px) {
   vec3 c = floor(q);
   vec3 f = fract(q) - 0.5;
   f -= (vec3(plushHash(c + 1.7), plushHash(c + 4.3), plushHash(c + 7.9)) - 0.5) * 0.45;
   f -= n * dot(f, n);
   float h = 0.35 + 0.65 * plushHash(c);
-  if (t > h) return 0.0;
+  if (t > h) return vec2(0.0);
   float r = 0.62 * (1.0 - 0.85 * t / h);
-  return length(f) < r ? h : 0.0;
+  return vec2(clamp((r - length(f)) / px + 0.5, 0.0, 1.0), h);
 }
 void main() {
   vec3 q = vBase / uStrand;
+  // Strands narrower than a couple of pixels can't be drawn one by one — they
+  // would turn into per-pixel noise that crawls as the plush moves — so the
+  // pattern fades into its average: how much of each shell strands cover
+  // (fitted to plushStrand) and how tall they are there.
+  float px = max(max(length(dFdx(q)), length(dFdy(q))), 1e-4);
+  float fine = smoothstep(0.45, 1.1, px);
   float tone;
+  float alpha = 1.0;
   if (vShell > 0.0) {
     if (uFur < 1e-4) discard;
     vec3 n = normalize(vBaseNormal);
-    float s = max(plushStrand(q, vShell, n), plushStrand(q + vec3(0.5, 0.31, 0.77), vShell, n));
-    if (s <= 0.0) discard;
-    tone = 0.9 + 0.2 * s;
+    vec2 a = plushStrand(q, vShell, n, px);
+    vec2 b = plushStrand(q + vec3(0.5, 0.31, 0.77), vShell, n, px);
+    vec2 s = a.x > b.x ? a : b;
+    alpha = mix(s.x, exp(-pow(vShell / 0.48, 2.1)), fine);
+    if (alpha < 0.004) discard;
+    tone = 0.9 + 0.2 * mix(s.y, 0.74 + 0.24 * vShell * vShell, fine);
   } else {
-    tone = 0.92 + 0.12 * plushHash(floor(q * 1.7));
+    tone = 0.92 + 0.12 * mix(plushHash(floor(q * 1.7)), 0.5, fine);
   }
-  gl_FragColor = linearToOutputTexel(vec4(vLit * tone, 1.0));
+  gl_FragColor = linearToOutputTexel(vec4(vLit * tone, alpha));
 }
 `;
 
@@ -743,6 +754,9 @@ function furMaterial(
     uniforms,
     vertexShader: FUR_VERTEX,
     fragmentShader: FUR_FRAGMENT,
+    // Strand edges are soft: shells blend over the ones beneath, which the
+    // geometry draws first (layer by layer, root to tip).
+    transparent: true,
   });
   return {material, uniforms};
 }
@@ -1389,8 +1403,8 @@ interface FabricPreset {
 const FABRICS: Record<PlushieFabric, FabricPreset> = {
   plush: {fur: 0.05, grain: 1, sheen: 1, mottle: 0, root: 0.58, gravity: 0.35},
   // Pressed wool: a haze of very fine fibres, no gloss, uneven density.
-  felt: {fur: 0.016, grain: 0.4, sheen: 0.3, mottle: 0.17, root: 0.8, gravity: 0.08},
-  velvet: {fur: 0.012, grain: 0.3, sheen: 2.1, mottle: 0, root: 0.45, gravity: 0},
+  felt: {fur: 0.016, grain: 0.8, sheen: 0.3, mottle: 0.17, root: 0.8, gravity: 0.08},
+  velvet: {fur: 0.012, grain: 0.9, sheen: 2.1, mottle: 0, root: 0.45, gravity: 0},
   shaggy: {fur: 0.11, grain: 1.7, sheen: 0.8, mottle: 0.06, root: 0.5, gravity: 0.7},
   fleece: {fur: 0.06, grain: 2.8, sheen: 0.45, mottle: 0.14, root: 0.55, gravity: -0.2},
 };
