@@ -72,7 +72,7 @@ mountPlushie(document.querySelector('#hero'), {kind: 'cloud'});`,
 ];
 
 const VIEWER_API: [string, string][] = [
-  ['mountPlushie(el, THREE, options)', 'Fill <code>el</code> with a transparent canvas and a plushie. Give the element a size. Renders only while something moves.'],
+  ['mountPlushie(el, THREE, options)', 'Fill <code>el</code> with a transparent canvas and a plushie. Give the element a size. Renders only while something moves; all viewers share one WebGL context.'],
   ['view.set(pose)', 'Set pose fields right away: <code>lookX</code>, <code>blink</code>, <code>squash</code>, <code>color</code>…'],
   ['view.to(pose, seconds, ease)', 'Tween numeric pose fields. Resolves when done.'],
   ['view.look(x, y)', 'Point the eyes, −1..1 each.'],

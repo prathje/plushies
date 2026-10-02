@@ -3,6 +3,11 @@
  * resize handling, a render loop that only runs while something changes, a
  * few tweens and an optional idle loop.
  *
+ * All viewers on a page draw through one hidden WebGL context (per three
+ * module) and copy their pixels onto their own 2D canvas. Browsers cap live
+ * WebGL contexts at around 16, so this keeps a page of plushies working, and
+ * shaders and the environment map are built only once.
+ *
  *   import * as THREE from 'three';
  *   import {mountPlushie} from 'plushies/viewer';
  *   const view = mountPlushie(document.querySelector('#hero'), THREE, {kind: 'heart', color: '#f47c9a', idle: true});
@@ -57,14 +62,74 @@ export interface PlushieViewer {
   dispose(): void;
 }
 
+type Renderer = InstanceType<ThreeModule['WebGLRenderer']>;
+
+interface SharedRenderer {
+  renderer: Renderer;
+  users: number;
+  /** Drawing-buffer size in device pixels; grows to fit the largest viewer. */
+  width: number;
+  height: number;
+}
+
+const SHARED = new WeakMap<ThreeModule, SharedRenderer>();
+
+function acquireRenderer(three: ThreeModule): SharedRenderer {
+  let shared = SHARED.get(three);
+  if (!shared) {
+    const renderer = new three.WebGLRenderer({antialias: true, alpha: true, premultipliedAlpha: true});
+    renderer.setClearColor(0x000000, 0);
+    // Sizes below are in device pixels.
+    renderer.setPixelRatio(1);
+    renderer.setSize(1, 1, false);
+    renderer.setScissorTest(true);
+    shared = {renderer, users: 0, width: 1, height: 1};
+    SHARED.set(three, shared);
+  }
+  shared.users++;
+  return shared;
+}
+
+function releaseRenderer(three: ThreeModule, shared: SharedRenderer) {
+  if (--shared.users > 0) return;
+  SHARED.delete(three);
+  shared.renderer.dispose();
+  // Give the context back now rather than at garbage collection.
+  shared.renderer.forceContextLoss();
+}
+
+/** Render into the bottom-left w×h of the shared buffer and copy that onto `target`. */
+function paint(
+  shared: SharedRenderer,
+  scene: InstanceType<ThreeModule['Scene']>,
+  camera: InstanceType<ThreeModule['PerspectiveCamera']>,
+  target: CanvasRenderingContext2D,
+  w: number,
+  h: number,
+) {
+  const {renderer} = shared;
+  if (w > shared.width || h > shared.height) {
+    shared.width = Math.max(w, shared.width);
+    shared.height = Math.max(h, shared.height);
+    renderer.setSize(shared.width, shared.height, false);
+  }
+  renderer.setViewport(0, 0, w, h);
+  renderer.setScissor(0, 0, w, h);
+  renderer.render(scene, camera);
+  // GL's origin is bottom-left; the copy has to happen in this task, before the buffer is presented.
+  target.clearRect(0, 0, w, h);
+  target.drawImage(renderer.domElement, 0, shared.height - h, w, h, 0, 0, w, h);
+}
+
 const NUMERIC: Numeric[] = ['lookX', 'lookY', 'blink', 'squash', 'hop', 'lean', 'turn', 'float', 'fur'];
 
 /** Mount a plushie filling `container` (give the container a size). */
 export function mountPlushie(container: HTMLElement, three: ThreeModule, options: ViewerOptions = {}): PlushieViewer {
   const {idle = false, followPointer = false, maxPixelRatio = 2, ...rest} = options;
-  const renderer = new three.WebGLRenderer({antialias: true, alpha: true, premultipliedAlpha: true});
-  renderer.setClearColor(0x000000, 0);
-  const canvas = renderer.domElement;
+  const shared = acquireRenderer(three);
+  const {renderer} = shared;
+  const canvas = document.createElement('canvas');
+  const context = canvas.getContext('2d')!;
   canvas.style.display = 'block';
   canvas.style.width = '100%';
   canvas.style.height = '100%';
@@ -87,8 +152,8 @@ export function mountPlushie(container: HTMLElement, three: ThreeModule, options
     width = Math.max(1, container.clientWidth);
     height = Math.max(1, container.clientHeight);
     const ratio = Math.min(maxPixelRatio, window.devicePixelRatio || 1);
-    renderer.setPixelRatio(ratio);
-    renderer.setSize(width, height, false);
+    canvas.width = Math.round(width * ratio);
+    canvas.height = Math.round(height * ratio);
     camera.fov = (2 * Math.atan(height / 2 / DISTANCE) * 180) / Math.PI;
     camera.aspect = width / height;
     camera.near = 0.08;
@@ -126,7 +191,7 @@ export function mountPlushie(container: HTMLElement, three: ThreeModule, options
       }
     }
     plushie.set(next);
-    renderer.render(scene, camera);
+    paint(shared, scene, camera, context, canvas.width, canvas.height);
     if (tweens.size) invalidate();
   };
 
@@ -227,9 +292,7 @@ export function mountPlushie(container: HTMLElement, three: ThreeModule, options
       observer.disconnect();
       window.removeEventListener('pointermove', onPointer);
       plushie.dispose();
-      renderer.dispose();
-      // Browsers cap live WebGL contexts per page; give this one back now.
-      renderer.forceContextLoss();
+      releaseRenderer(three, shared);
       canvas.remove();
     },
   };

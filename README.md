@@ -56,7 +56,9 @@ small build and pass your copy in.
 ```
 
 The canvas is transparent and fills its container. The viewer only renders
-while something changes.
+while something changes. Every viewer on the page draws through one shared,
+hidden WebGL context, so you can mount dozens without hitting the browser's
+limit of about 16 contexts.
 
 | method | |
 |---|---|
@@ -65,7 +67,7 @@ while something changes.
 | `view.look(x, y)` · `view.blink()` · `view.hop(height)` · `view.squish(amount)` | little performances, all promises |
 | `view.restyle(options)` | swap the look in place, keeping the pose |
 | `view.setIdle(on)` · `view.setFollowPointer(on)` | toggle the idle loop / pointer following |
-| `view.dispose()` | remove the canvas, free the GPU (and the WebGL context) |
+| `view.dispose()` | remove the canvas and free its GPU resources (the shared context goes with the last viewer) |
 
 With `plushies/bundled` or the global build, drop the `THREE` argument:
 `mountPlushie(element, options)` / `createPlushie(options)`.

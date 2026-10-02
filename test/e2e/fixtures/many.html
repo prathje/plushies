@@ -1,0 +1,19 @@
+<!doctype html>
+<meta charset="utf-8" />
+<script type="importmap">{"imports": {"three": "/node_modules/three/build/three.module.js"}}</script>
+<style>body { margin: 0; display: flex; flex-wrap: wrap } .p { width: 120px; height: 120px }</style>
+<script type="module">
+  import * as THREE from 'three';
+  import {mountPlushie} from '/dist/viewer.js';
+  const kinds = ['heart', 'star', 'cloud', 'ghost', 'drop', 'blob'];
+  // More viewers than the ~16 live WebGL contexts a browser allows.
+  window.mount = (count, size = 120) =>
+    Array.from({length: count}, (_, i) => {
+      const el = document.createElement('div');
+      el.className = 'p';
+      el.style.width = el.style.height = `${size}px`;
+      document.body.append(el);
+      return mountPlushie(el, THREE, {kind: kinds[i % kinds.length], color: `hsl(${i * 15} 70% 70%)`});
+    });
+  window.views = window.mount(24);
+</script>
