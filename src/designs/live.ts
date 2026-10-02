@@ -84,7 +84,7 @@ export function liveDesign(): Design {
     plushHost,
     // Where the sparkle was: just above and right of the pointer's back.
     anchor: {x: 32, y: -15},
-    motion: {tip: 16, body: 13, damping: 0.5, bob: 1.5, hop: 14},
+    motion: {tip: 16, body: 13, damping: 0.68, bob: 1.5, hop: 14},
     vertical: 1,
     room: () => ({x: 10 + box.offsetWidth + 6, y: 10 + box.offsetHeight + 6}),
     render(view: CursorView) {
