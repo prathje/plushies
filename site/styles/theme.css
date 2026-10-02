@@ -1,0 +1,151 @@
+/* Marshmallow — candy-pastel soft UI. Puffy, squeezable controls in a quiet
+   oat-milk and lilac chrome, so the plushie is the only thing in full colour. */
+
+{
+  --bg: #f7f2ec;
+  --bg-2: #efe8f1;
+  --surface: #fffdfb;
+  --ink: #2b2240;
+  --ink-2: #6a6080;
+  --line: #e4dae6;
+  --line-strong: #b9aec4;
+  --accent: #6b4de6;
+  --accent-ink: #ffffff;
+  --accent-2: #ffc2d4;
+  --focus: #0e8f86;
+  --code-bg: #2b2240;
+  --code-ink: #f3eeff;
+  --tok-kw: #b9a3ff;
+  --tok-str: #ffc2d4;
+  --tok-num: #ffd58a;
+  --tok-key: #a5e4dc;
+  --tok-com: #9a90b0;
+  --tok-fn: #ffe3a8;
+  --hi: rgb(255 255 255 / 0.9);
+  --lo: rgb(92 64 140 / 0.16);
+  --drop: rgb(60 40 100 / 0.18);
+  --cushion-l: 0.93;
+  --cushion-c: 0.04;
+
+  --font-display: 'Fredoka', system-ui, sans-serif;
+  --font-body: 'Nunito', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  --font-note: 'Fredoka', system-ui, sans-serif;
+  --display-weight: 600;
+  --display-tracking: -0.015em;
+  --r-s: 14px;
+  --r-m: 20px;
+  --r-l: 32px;
+  --puff: 0 10px 24px -6px var(--drop), 0 2px 4px var(--drop), inset 0 2px 1px var(--hi), inset 0 -6px 12px var(--lo);
+  --puff-sm: 0 4px 10px -2px var(--drop), inset 0 1.5px 0 var(--hi), inset 0 -3px 6px var(--lo);
+  --dent: inset 0 3px 8px var(--lo), inset 0 -1px 0 var(--hi);
+  --shadow-card: var(--puff);
+  --shadow-ctl: var(--puff-sm);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --bg: #1b1626; --bg-2: #251e33; --surface: #2e2640;
+    --ink: #f6f0fa; --ink-2: #b5abc7; --line: #3a3150; --line-strong: #5d5276;
+    --accent: #b9a3ff; --accent-ink: #1b1236; --accent-2: #5a2e4a; --focus: #5fe0d3;
+    --code-bg: #120e1a; --code-ink: #ede6ff;
+    --hi: rgb(255 255 255 / 0.07); --lo: rgb(0 0 0 / 0.45); --drop: rgb(0 0 0 / 0.5);
+    --cushion-l: 0.3; --cushion-c: 0.05;
+    color-scheme: dark;
+  }
+}
+:root[data-theme='dark'] {
+  --bg: #1b1626; --bg-2: #251e33; --surface: #2e2640;
+  --ink: #f6f0fa; --ink-2: #b5abc7; --line: #3a3150; --line-strong: #5d5276;
+  --accent: #b9a3ff; --accent-ink: #1b1236; --accent-2: #5a2e4a; --focus: #5fe0d3;
+  --code-bg: #120e1a; --code-ink: #ede6ff;
+  --hi: rgb(255 255 255 / 0.07); --lo: rgb(0 0 0 / 0.45); --drop: rgb(0 0 0 / 0.5);
+  --cushion-l: 0.3; --cushion-c: 0.05;
+  color-scheme: dark;
+}
+
+/* Sugar dots and two blurred candy blobs. */
+body {
+  background:
+    radial-gradient(circle at 1px 1px, color-mix(in oklab, var(--ink) 7%, transparent) 1px, transparent 1.5px) 0 0 / 22px 22px,
+    var(--bg);
+}
+.backdrop .blob { display: block; position: absolute; border-radius: 50%; filter: blur(60px); }
+.blob-a { width: 46vmax; height: 34vmax; right: -12vmax; top: -10vmax; background: color-mix(in oklab, var(--accent-2) 70%, transparent); }
+.blob-b { width: 40vmax; height: 30vmax; left: -16vmax; top: 38vh; background: color-mix(in oklab, var(--accent) 14%, transparent); }
+
+.hero-title { font-weight: 700; line-height: 0.95; }
+.eyebrow { font-weight: 800; color: var(--accent); }
+
+/* Puffy everything. */
+.btn { min-height: 52px; font-family: var(--font-display); font-weight: 600; font-size: 1.05rem; border: 0; }
+.btn-primary { box-shadow: 0 10px 22px -8px color-mix(in oklab, var(--accent) 70%, transparent), inset 0 2px 1px rgb(255 255 255 / 0.35), inset 0 -5px 10px rgb(0 0 0 / 0.18); }
+.btn-secondary { box-shadow: var(--puff-sm); }
+.btn-small { min-height: 38px; font-size: 0.9rem; }
+:is(.btn, .chip, .shape-tile, .swatch):active {
+  transform: scale(1.04, 0.92) translateY(2px); transition: transform 0.12s ease-out;
+}
+:is(.btn, .chip, .shape-tile, .swatch) { transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s; }
+.chip { border: 0; box-shadow: var(--puff-sm); font-family: var(--font-display); font-weight: 500; }
+.install-pill { box-shadow: 0 10px 24px -10px var(--drop), inset 0 2px 1px rgb(255 255 255 / 0.12); }
+.icon-btn { border: 0; box-shadow: var(--puff-sm); }
+
+/* The cushion stage: a soft oval tinted with the plushie's complementary hue. */
+.stage-mat {
+  left: 50%; top: 52%; width: 86%; height: 80%; translate: -50% -50%; border-radius: 50%;
+  background: oklch(var(--cushion-l) var(--cushion-c) calc(var(--plush-h, 300) + 180));
+  box-shadow: inset 0 10px 24px var(--lo), inset 0 -4px 10px var(--hi);
+  transition: background-color 0.5s;
+}
+.look-stage .stage-mat { width: 88%; height: 84%; }
+.editor-stage { background: var(--surface); }
+.editor-stage .stage-mat { top: 46%; width: 70%; height: 78%; }
+.hint { font-family: var(--font-display); font-weight: 500; color: var(--accent); }
+
+.look { box-shadow: var(--puff); }
+.look::after {
+  content: ''; position: absolute; inset: 6px 12% auto; height: 30%; border-radius: inherit; pointer-events: none;
+  background: linear-gradient(var(--hi), transparent); opacity: 0.5;
+}
+.look-name { font-weight: 600; }
+.group summary { font-weight: 600; }
+
+/* Wells and pillows. */
+.seg { border-radius: var(--r-pill); box-shadow: var(--dent); padding: 4px; }
+.seg-option span { border-radius: var(--r-pill); min-height: 36px; }
+.seg-option input:checked + span { box-shadow: var(--puff-sm); }
+.shape-tile { border: 0; background: var(--surface); box-shadow: var(--puff-sm); border-radius: 20px; }
+.shape-tile[aria-checked='true'] { box-shadow: var(--puff-sm), 0 0 0 3px var(--accent); transform: translateY(-2px); }
+.swatch { border-radius: 50%; box-shadow: 0 4px 8px -2px var(--drop), inset 0 2px 1px rgb(255 255 255 / 0.45), inset 0 -4px 6px rgb(0 0 0 / 0.12); }
+.swatch[aria-pressed='true'] { box-shadow: 0 0 0 3px var(--surface), 0 0 0 6px var(--ink); }
+.toggle-track { width: 52px; height: 32px; box-shadow: var(--dent); }
+.toggle input { width: 52px; height: 32px; }
+.toggle-track::after { width: 26px; height: 26px; box-shadow: var(--puff-sm); transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1); }
+.toggle input:checked + .toggle-track::after { transform: translateX(20px); }
+input[type='range']::-webkit-slider-runnable-track { height: 14px; box-shadow: var(--dent); }
+input[type='range']::-moz-range-track { height: 14px; box-shadow: var(--dent); }
+input[type='range']::-moz-range-progress { height: 14px; }
+input[type='range'] { height: 32px; }
+input[type='range']::-webkit-slider-thumb {
+  width: 28px; height: 28px; margin-top: -7px; border: 0;
+  box-shadow: var(--puff-sm), 0 0 0 4px color-mix(in oklab, var(--accent) 25%, transparent);
+  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+input[type='range']::-moz-range-thumb { width: 26px; height: 26px; border: 0; box-shadow: var(--puff-sm); }
+input[type='range']:active::-webkit-slider-thumb { transform: scale(1.18, 0.86); }
+.code-card { box-shadow: var(--dent); }
+.code { border-radius: var(--r-m); box-shadow: inset 0 2px 1px rgb(255 255 255 / 0.08); }
+.share-url, .color-pick { border: 0; box-shadow: var(--dent); }
+.callout { border: 0; background: color-mix(in oklab, var(--accent-2) 45%, var(--surface)); box-shadow: var(--puff-sm); }
+.doc-card .tabs { box-shadow: var(--dent); }
+
+.footer { border-radius: 44px 44px 0 0; box-shadow: inset 0 3px 0 var(--hi); }
+.section + .section::before {
+  content: ''; position: absolute; top: 0; left: var(--gutter); right: var(--gutter); height: 12px;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='12'%3E%3Cpath d='M0 6q10-6 20 0t20 0' fill='none' stroke='%23b9aec4' stroke-width='2' stroke-dasharray='4 4'/%3E%3C/svg%3E") repeat-x center;
+  opacity: 0.8;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .look { animation: mm-rise 0.6s cubic-bezier(0.34, 1.4, 0.64, 1) both; animation-delay: calc(var(--i, 0) * 60ms); }
+}
+@keyframes mm-rise { from { opacity: 0; transform: translateY(16px); } }

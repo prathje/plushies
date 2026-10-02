@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>plushies demo</title>
+  <style>
+    body { margin: 0; font: 15px/1.4 system-ui, sans-serif; background: #f3ede4; color: #2b2520; }
+    main { max-width: 960px; margin: 0 auto; padding: 32px 16px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 16px; }
+    .cell { aspect-ratio: 1; background: #fffaf3; border-radius: 16px; cursor: pointer; }
+    .label { text-align: center; margin-top: 4px; opacity: .6; }
+  </style>
+  <script type="importmap">
+    {"imports": {"three": "https://cdn.jsdelivr.net/npm/three@0.186.0/build/three.module.js"}}
+  </script>
+</head>
+<body>
+<main>
+  <h1>plushies</h1>
+  <p>Click one to make it hop. The eyes follow your pointer.</p>
+  <div class="grid" id="grid"></div>
+</main>
+<script type="module">
+  import * as THREE from 'three';
+  import {mountPlushie} from '../dist/viewer.js'; // bun run build first
+
+  const looks = [
+    {kind: 'circle', color: '#f2b33d', glasses: 'round', bowtie: true},
+    {kind: 'heart', color: '#f47c9a', mouth: 'smile', cheeks: true},
+    {kind: 'star', color: '#7cc4f4', hat: 'party', eyes: 'happy'},
+    {kind: 'ghost', color: '#e9e4f7', fabric: 'felt', finish: 'felt', mouth: 'open'},
+    {kind: 'square', color: '#8fd19e', fabric: 'shaggy', eyes: 'googly'},
+    {kind: 'cloud', color: '#ffffff', fabric: 'fleece', hat: 'beanie', mouth: 'cat'},
+    {kind: 'triangle', color: '#c98bf2', fabric: 'velvet', glasses: 'shades'},
+    {kind: 'flower', color: '#ffb35c', hat: 'crown', eyes: 'oval', mouth: 'grin'},
+  ];
+  const grid = document.getElementById('grid');
+  for (const look of looks) {
+    const wrap = document.createElement('div');
+    const cell = document.createElement('div');
+    cell.className = 'cell';
+    const label = document.createElement('div');
+    label.className = 'label';
+    label.textContent = look.kind;
+    wrap.append(cell, label);
+    grid.append(wrap);
+    const view = mountPlushie(cell, THREE, {...look, idle: true, followPointer: true});
+    cell.addEventListener('click', () => view.hop(40));
+  }
+</script>
+</body>
+</html>

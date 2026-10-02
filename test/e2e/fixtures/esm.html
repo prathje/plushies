@@ -1,0 +1,9 @@
+<!doctype html>
+<meta charset="utf-8" />
+<script type="importmap">{"imports": {"three": "/node_modules/three/build/three.module.js"}}</script>
+<div id="plush" style="width: 320px; height: 320px"></div>
+<script type="module">
+  import * as THREE from 'three';
+  import {mountPlushie} from '/dist/viewer.js';
+  window.view = mountPlushie(document.getElementById('plush'), THREE, {kind: 'heart', color: '#f47c9a', bowtie: true});
+</script>

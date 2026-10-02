@@ -1,0 +1,7 @@
+<!doctype html>
+<meta charset="utf-8" />
+<div id="plush" style="width: 320px; height: 320px"></div>
+<script type="module">
+  import {mountPlushie} from '/dist/plushies.bundled.js';
+  window.view = mountPlushie(document.getElementById('plush'), {kind: 'cloud', color: '#7cc4f4', glasses: 'round'});
+</script>

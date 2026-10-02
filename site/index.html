@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>plushies — soft 3D plush characters for three.js</title>
+  <meta name="description" content="Soft, furry 3D plush characters for three.js. 17 silhouettes, five fabrics, floating eyes, glasses and hats, squash & stretch. Configure one and drop it into your page." />
+  <meta property="og:title" content="plushies" />
+  <meta property="og:description" content="Soft 3D plush characters for three.js — configure one and drop it into your page." />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16 29C7 22 2 17 2 11a7 7 0 0 1 14-2 7 7 0 0 1 14 2c0 6-5 11-14 18z' fill='%23f47c9a'/%3E%3Ccircle cx='11.5' cy='13' r='2' fill='%2318130f'/%3E%3Ccircle cx='20.5' cy='13' r='2' fill='%2318130f'/%3E%3C/svg%3E" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@400;600;800&family=JetBrains+Mono:wght@400;600&display=swap" />
+  <script>
+    // Pick the theme before first paint (no flash).
+    (function () {
+      var t = new URLSearchParams(location.search).get('theme');
+      try { t = t || localStorage.getItem('plushies-theme'); } catch (e) {}
+      if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
+    })();
+  </script>
+  <link rel="stylesheet" href="./styles/base.css" />
+  <link rel="stylesheet" href="./styles/theme.css" />
+</head>
+<body>
+  <div class="backdrop" aria-hidden="true">
+    <span class="blob blob-a"></span><span class="blob blob-b"></span>
+  </div>
+
+  <header class="nav">
+    <a class="brand" href="#top" aria-label="plushies home">
+      <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true"><path d="M16 29C7 22 2 17 2 11a7 7 0 0 1 14-2 7 7 0 0 1 14 2c0 6-5 11-14 18z" /><circle cx="11.5" cy="13" r="2" /><circle cx="20.5" cy="13" r="2" /></svg>
+      <span>plushies</span>
+    </a>
+    <nav class="nav-links" aria-label="Sections">
+      <a href="#gallery">Gallery</a>
+      <a href="#editor">Editor</a>
+      <a href="#docs">Docs</a>
+      <a class="repo-link" href="#" data-repo hidden>GitHub</a>
+    </nav>
+    <button class="icon-btn theme-btn" type="button" aria-label="Colour theme: auto" title="Colour theme">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.5" /><path d="M12 2.5v2.5M12 19v2.5M2.5 12H5M19 12h2.5M5.3 5.3l1.8 1.8M16.9 16.9l1.8 1.8M5.3 18.7l1.8-1.8M16.9 7.1l1.8-1.8" /></svg>
+    </button>
+  </header>
+
+  <main id="top">
+    <section class="hero">
+      <div class="hero-copy">
+        <p class="eyebrow">soft 3D characters for three.js</p>
+        <h1 class="hero-title">Squishy 3D friends for the web.</h1>
+        <p class="lede">Pick a silhouette — heart, star, cloud, 17 in all — and plushies inflates it into a pillow with a rolled seam and real fur. Floating eyes, glasses and hats, squash &amp; stretch, and every pose is a plain number.</p>
+        <div class="install-pill">
+          <code>npm i plushies three</code>
+          <button class="copy-btn" type="button" data-copy-text="npm i plushies three">Copy</button>
+        </div>
+        <div class="hero-actions">
+          <a class="btn btn-primary" href="#editor">Open the workbench</a>
+          <a class="btn btn-secondary" href="#docs">Read the docs</a>
+        </div>
+      </div>
+      <div class="hero-stage stage" data-stage>
+        <div class="stage-mat" aria-hidden="true"></div>
+        <div class="plush-host" id="hero-plush" role="img" aria-label="A plush character. Click it to make it hop."></div>
+        <p class="hint hint-a" aria-hidden="true"><svg viewBox="0 0 60 30"><path d="M4 24C18 26 34 20 52 6m0 0-9 1m9-1-2 9" /></svg>follows your cursor</p>
+        <p class="hint hint-b" aria-hidden="true"><svg viewBox="0 0 60 30"><path d="M56 6C42 4 24 10 8 24m0 0 9 0m-9 0 1-9" /></svg>click to hop</p>
+      </div>
+    </section>
+
+    <section class="section" id="gallery" aria-labelledby="gallery-title">
+      <header class="section-head">
+        <h2 id="gallery-title">A few friends</h2>
+        <p>Every one of these is a handful of options. Open one in the editor to see how it's made.</p>
+      </header>
+      <div class="gallery" id="gallery-grid"></div>
+    </section>
+
+    <section class="section" id="editor" aria-labelledby="editor-title">
+      <header class="section-head">
+        <h2 id="editor-title">The workbench</h2>
+        <p>Make your own. The code updates as you go — copy it, or share a link to your plushie.</p>
+      </header>
+      <div class="editor">
+        <div class="editor-main">
+          <div class="editor-stage stage" data-stage>
+            <div class="stage-mat" aria-hidden="true"></div>
+            <div class="plush-host" id="editor-plush" role="img" aria-label="Preview of your plushie"></div>
+            <div class="stage-toolbar" role="toolbar" aria-label="Preview actions">
+              <button class="chip" type="button" data-action="hop">Hop</button>
+              <button class="chip" type="button" data-action="squish">Squish</button>
+              <button class="chip" type="button" data-action="blink">Blink</button>
+              <span class="toolbar-gap"></span>
+              <button class="chip" type="button" data-action="random">Surprise me</button>
+              <button class="chip" type="button" data-action="reset">Reset</button>
+            </div>
+          </div>
+          <div class="code-card">
+            <div class="tabs" role="tablist" aria-label="Code flavour" id="code-tabs"></div>
+            <div class="code-wrap">
+              <pre class="code" id="code-out" tabindex="0"><code></code></pre>
+              <button class="copy-btn code-copy" type="button" id="code-copy">Copy</button>
+            </div>
+            <div class="share-row">
+              <input class="share-url" id="share-url" type="text" readonly aria-label="Share link" />
+              <button class="btn btn-secondary btn-small" type="button" id="share-copy">Copy link</button>
+            </div>
+          </div>
+        </div>
+        <form class="controls" id="controls" aria-label="Plushie options" onsubmit="return false"></form>
+      </div>
+    </section>
+
+    <section class="section docs" id="docs" aria-labelledby="docs-title">
+      <header class="section-head">
+        <h2 id="docs-title">Use it</h2>
+        <p>Three ways in, depending on what your page already has.</p>
+      </header>
+      <div class="docs-body" id="docs-body"></div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+      <div class="footer-plush plush-host" id="footer-plush" aria-hidden="true"></div>
+      <p><strong>plushies</strong> · MIT licensed · built on <a href="https://threejs.org">three.js</a></p>
+      <p class="footer-links"><a href="#" data-repo hidden>Source on GitHub</a> <a href="#docs">Docs</a> <a href="#editor">Editor</a></p>
+    </div>
+  </footer>
+
+
+  <script type="module" src="./main.ts"></script>
+</body>
+</html>
