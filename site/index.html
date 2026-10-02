@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>plushie cursors</title>
+  <meta name="description" content="Floating plushie cursors for AI helpers — three designs, on HTML or canvas." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600&family=Inter:wght@400;500;600;700&family=Nunito:wght@600;800&display=swap" />
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <header class="top">
+    <div class="brand"><span class="dot"></span>plushie cursors</div>
+    <div class="seg" role="radiogroup" aria-label="Design" id="designs">
+      <button role="radio" data-design="live" aria-checked="true">Live <small>VideoZero</small></button>
+      <button role="radio" data-design="buddy" aria-checked="false">Buddy</button>
+      <button role="radio" data-design="island" aria-checked="false">Island</button>
+      <button role="radio" data-design="mixed" aria-checked="false">Mixed</button>
+    </div>
+    <div class="top-actions">
+      <label class="toggle"><input type="checkbox" id="follow" /> Pip follows me</label>
+      <button class="btn" id="pause">Pause</button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="workspace" id="workspace" aria-label="A mock video editor with AI helpers">
+      <div class="stage-wrap">
+        <div class="stage" id="stage">
+          <div class="logo" id="logo"><svg viewBox="0 0 32 32"><path d="M16 29C7 22 2 17 2 11a7 7 0 0 1 14-2 7 7 0 0 1 14 2c0 6-5 11-14 18z"/></svg>Plush&nbsp;Co.</div>
+          <h1 class="headline" id="headline">Soft things, made to last.</h1>
+          <p class="subtitle" id="subtitle">Every plushie is hand-stiched from recycled felt.</p>
+          <div class="chart" id="chart" aria-label="Bar chart"><i style="--h:.45"></i><i style="--h:.7"></i><i style="--h:.55"></i><i style="--h:.9"></i></div>
+          <button class="cta" id="cta" tabindex="-1">Shop the collection</button>
+        </div>
+      </div>
+      <div class="timeline">
+        <div class="timeline-head"><span>Timeline</span><small>canvas</small></div>
+        <canvas id="timeline" aria-label="Timeline drawn on a canvas"></canvas>
+      </div>
+    </section>
+
+    <aside class="panel">
+      <h2>Playground</h2>
+      <p class="muted">Take over one helper. Its script pauses while you drive.</p>
+      <label>Helper
+        <select id="who"></select>
+      </label>
+      <label>Working on
+        <input id="text" value="Recolouring the button" />
+      </label>
+      <label>Detail
+        <input id="detail" value="Trying #e8574f" />
+      </label>
+      <label>Progress <output id="pv">40%</output>
+        <input id="progress" type="range" min="0" max="100" value="40" />
+      </label>
+      <div class="row">
+        <button class="btn" id="b-status">Set status</button>
+        <button class="btn" id="b-clear">Clear</button>
+      </div>
+      <div class="row">
+        <button class="btn" id="b-say">Say hi</button>
+        <button class="btn" id="b-click">Click</button>
+        <button class="btn" id="b-done">Done</button>
+      </div>
+      <button class="btn ghost" id="b-resume">Resume script</button>
+      <hr />
+      <h2>The three designs</h2>
+      <ul class="notes">
+        <li><b>Live</b> — VideoZero's live editor cursor: the tail-less arrow, a name pill that grows into a chat bubble, the sparkle's glints. The plushie sits where the sparkle was.</li>
+        <li><b>Buddy</b> — the plushie floats like a balloon on a string, with a sewn-on name tag and a typed-out speech bubble.</li>
+        <li><b>Island</b> — a glass capsule: the plushie on a seat ringed by progress, growing into a status card.</li>
+      </ul>
+    </aside>
+  </main>
+  <script type="module" src="./main.ts"></script>
+</body>
+</html>
