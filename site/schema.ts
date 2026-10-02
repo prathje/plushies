@@ -12,7 +12,11 @@ import {
   PLUSHIE_GLASSES,
   PLUSHIE_HATS,
   PLUSHIE_KINDS,
+  PLUSHIE_MOUSTACHES,
   PLUSHIE_MOUTHS,
+  PLUSHIE_NECKS,
+  PLUSHIE_PINS,
+  ACCESSORY_COLORS,
   fabricFur,
 } from '../src/index';
 import type {Look} from './looks';
@@ -75,7 +79,7 @@ export interface Group {
 }
 
 const D = DEFAULT_OPTIONS;
-const HAT_COLORS: Record<string, string> = {top: '#221f26', beanie: '#e0533d', crown: '#e8b949'};
+const worn = (value: string | undefined) => !!value && value !== 'none';
 
 export const GROUPS: Group[] = [
   {
@@ -118,8 +122,13 @@ export const GROUPS: Group[] = [
       {type: 'range', key: 'faceY', label: 'Face height', where: 'look', min: -0.6, max: 0.6, step: 0.01, default: D.faceY, doc: 'Moves the face up (+) or down (−).'},
       {type: 'choice', key: 'mouth', label: 'Mouth', where: 'look', options: PLUSHIE_MOUTHS, default: D.mouth, doc: 'Mouth style.'},
       {type: 'toggle', key: 'cheeks', label: 'Blush', where: 'look', default: D.cheeks, doc: 'Blush discs under the eyes.'},
+      {type: 'choice', key: 'moustache', label: 'Moustache', where: 'look', options: PLUSHIE_MOUSTACHES, default: D.moustache, doc: 'Moustache over the mouth.'},
+      {
+        type: 'color', key: 'moustacheColor', label: 'Moustache colour', where: 'look', auto: true,
+        default: look => look.featureColor ?? D.featureColor, when: look => worn(look.moustache), doc: 'Moustache colour (default: feature colour).',
+      },
       {type: 'color', key: 'cheekColor', label: 'Blush colour', where: 'look', default: D.cheekColor, when: look => !!look.cheeks, doc: 'Blush colour.'},
-      {type: 'choice', key: 'finish', label: 'Finish', where: 'look', options: PLUSHIE_FINISHES, default: D.finish, doc: 'Surface of eyes, mouth, glasses and bow tie.'},
+      {type: 'choice', key: 'finish', label: 'Finish', where: 'look', options: PLUSHIE_FINISHES, default: D.finish, doc: 'Surface of eyes, mouth, moustache, glasses, neckwear and pins.'},
       {type: 'color', key: 'featureColor', label: 'Feature colour', where: 'look', default: D.featureColor, doc: 'Eyes, mouth and eyebrows.'},
     ],
   },
@@ -132,20 +141,26 @@ export const GROUPS: Group[] = [
         type: 'color', key: 'glassesColor', label: 'Frame colour', where: 'look', auto: true,
         default: look => look.featureColor ?? D.featureColor, when: look => !!look.glasses && look.glasses !== 'none', doc: 'Glasses frame colour (default: feature colour).',
       },
-      {type: 'choice', key: 'hat', label: 'Hat', where: 'look', options: PLUSHIE_HATS, default: D.hat, doc: 'Hat.'},
-      {type: 'range', key: 'hatSize', label: 'Hat size', where: 'look', min: 0.5, max: 1.6, step: 0.01, default: D.hatSize, when: look => !!look.hat && look.hat !== 'none', doc: 'Hat size multiplier.'},
+      {type: 'choice', key: 'hat', label: 'Hat', where: 'look', options: PLUSHIE_HATS, default: D.hat, doc: 'Hat. Shapes without a top in the middle wear it on a tip.'},
+      {type: 'range', key: 'hatSize', label: 'Hat size', where: 'look', min: 0.5, max: 1.6, step: 0.01, default: D.hatSize, when: look => worn(look.hat), doc: 'Hat size multiplier.'},
       {
         type: 'color', key: 'hatColor', label: 'Hat colour', where: 'look', auto: true,
-        default: look => HAT_COLORS[look.hat ?? ''] ?? look.accentColor ?? D.accentColor, when: look => !!look.hat && look.hat !== 'none', doc: 'Hat colour (each hat has its own default).',
+        default: look => ACCESSORY_COLORS.hat[look.hat ?? 'none'] ?? look.accentColor ?? D.accentColor, when: look => worn(look.hat), doc: 'Hat colour (each hat has its own default).',
+      },
+      {type: 'choice', key: 'neck', label: 'Neck', where: 'look', options: PLUSHIE_NECKS, default: D.neck, doc: 'Bow tie at the bottom edge, or a necktie under the mouth.'},
+      {
+        type: 'color', key: 'neckColor', label: 'Neck colour', where: 'look', auto: true,
+        default: look => (look.neck === 'bowtie' ? look.featureColor ?? D.featureColor : ACCESSORY_COLORS.neck[look.neck ?? 'none'] ?? look.accentColor ?? D.accentColor),
+        when: look => worn(look.neck), doc: 'Neckwear colour (the bow tie follows the feature colour).',
+      },
+      {type: 'choice', key: 'pin', label: 'Pin', where: 'look', options: PLUSHIE_PINS, default: D.pin, doc: 'Flower, bow or heart on the head; star or badge on the chest.'},
+      {
+        type: 'color', key: 'pinColor', label: 'Pin colour', where: 'look', auto: true,
+        default: look => ACCESSORY_COLORS.pin[look.pin ?? 'none'] ?? look.accentColor ?? D.accentColor, when: look => worn(look.pin), doc: 'Pin colour (each pin has its own default).',
       },
       {
         type: 'color', key: 'accentColor', label: 'Accent colour', where: 'look', default: D.accentColor,
-        when: look => !!look.hat && look.hat !== 'none', doc: 'Hat bands, party-hat stripes, crown jewels.',
-      },
-      {type: 'toggle', key: 'bowtie', label: 'Bow tie', where: 'look', default: D.bowtie, doc: 'A bow tie at the bottom edge.'},
-      {
-        type: 'color', key: 'bowtieColor', label: 'Bow-tie colour', where: 'look', auto: true,
-        default: look => look.featureColor ?? D.featureColor, when: look => !!look.bowtie, doc: 'Bow-tie colour (default: feature colour).',
+        when: look => worn(look.hat) || look.neck === 'necktie' || look.pin === 'badge', doc: 'Hat bands and tassels, party-hat stripes, jewels, necktie stripes, the badge.',
       },
     ],
   },
@@ -216,6 +231,9 @@ export function encodeState(state: EditorState): string {
 
 export function decodeState(hash: string): EditorState | null {
   const q = new URLSearchParams(hash.replace(/^#/, ''));
+  // Links from before `neck` existed.
+  if (q.get('bowtie') === '1' && !q.has('neck')) q.set('neck', 'bowtie');
+  if (q.has('bowtieColor') && !q.has('neckColor')) q.set('neckColor', q.get('bowtieColor')!);
   if (![...q.keys()].some(key => FIELD.has(key))) return null;
   const state: EditorState = {look: {}, pose: {}, idle: q.get('idle') !== '0', follow: q.get('follow') !== '0'};
   for (const [key, raw] of q) {

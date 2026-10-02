@@ -2,8 +2,9 @@
 
 Soft 3D plush characters for [three.js](https://threejs.org). A flat silhouette
 (circle, heart, star, … 17 kinds) is inflated into a stuffed pillow with a
-rolled seam and covered in real shell-textured fur. Eyes, mouth, glasses, hat
-and bow tie float in front of the body as separate pieces. Everything that
+rolled seam and covered in real shell-textured fur. Eyes, mouth, moustache,
+glasses, hats (top hat to fez to halo), pins and neckwear float in front of the
+body as separate pieces. Everything that
 moves — eye direction, blink, squash & stretch, hop, lean, turn — is a plain
 number you can set every frame.
 
@@ -110,16 +111,19 @@ points, e.g. for icons).
 | `thickness` | stuffing, relative to half-width | 0.42 |
 | `fabric` | plush, felt, velvet, shaggy, fleece | plush |
 | `furGrain` | strand size multiplier | from fabric |
-| `finish` | eyes/mouth/glasses/bow tie surface: gloss, satin, matte, felt | satin |
+| `finish` | surface of eyes, mouth, moustache, glasses, neckwear, pins: gloss, satin, matte, felt | satin |
 | `eyes` | dot, oval, googly, ring, happy, sleepy, none | dot |
 | `eyeSize`, `eyeSpacing` | multipliers | 1 |
 | `faceY` | face up (+) / down (−) | 0 |
 | `mouth` | none, smile, grin, open, flat, cat | none |
-| `cheeks`, `bowtie` | boolean | false |
+| `cheeks` | boolean | false |
+| `moustache` | none, curly, walrus, pencil | none |
 | `glasses` | none, round, square, monocle, shades | none |
-| `hat` | none, top, beanie, party, crown | none |
+| `hat` | none, top, beanie, party, crown, cowboy, cap, hardhat, fireman, santa, graduation, fez, halo — worn on a tip when the top has a dip (heart) | none |
 | `hatSize` | multiplier | 1 |
-| `featureColor`, `glassesColor`, `hatColor`, `bowtieColor`, `accentColor`, `cheekColor` | CSS colours | |
+| `neck` | none, bowtie, necktie (`bowtie: true` is shorthand) | none |
+| `pin` | none, flower, bow, heart (on the head), star, badge (on the chest) | none |
+| `featureColor`, `moustacheColor`, `glassesColor`, `hatColor`, `neckColor`, `pinColor`, `accentColor`, `cheekColor` | CSS colours (`ACCESSORY_COLORS` lists the per-item defaults) | |
 | `headroom` | free space above for hops, fraction of body height | 0.22 |
 | `shadow` | contact shadow | true |
 

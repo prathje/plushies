@@ -13,6 +13,7 @@ import {createPlushie as createWith, type Plushie, type PlushieOptions, type Plu
 import {mountPlushie as mountWith, type PlushieViewer, type ViewerOptions} from './viewer.js';
 
 export {
+  ACCESSORY_COLORS,
   DEFAULT_OPTIONS,
   DEFAULT_POSE,
   MAX_FUR_SHELLS,
@@ -22,7 +23,10 @@ export {
   PLUSHIE_GLASSES,
   PLUSHIE_HATS,
   PLUSHIE_KINDS,
+  PLUSHIE_MOUSTACHES,
   PLUSHIE_MOUTHS,
+  PLUSHIE_NECKS,
+  PLUSHIE_PINS,
   fabricFur,
   plushieOutline,
 } from './index.js';

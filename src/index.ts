@@ -3,8 +3,8 @@
  *
  * A body is a 2D silhouette (circle, heart, star, …) inflated into a stuffed
  * pillow with a rolled seam and covered in shell-textured fur. Eyes, mouth,
- * glasses, hat and bow tie are separate objects floating just in front of /
- * above the body.
+ * moustache, glasses, hat, pin and neckwear are separate objects floating just
+ * in front of / above the body.
  *
  * The library never imports `three` itself: pass your copy of the module to
  * `createPlushie(THREE, options)`. That keeps it working with whatever
@@ -82,7 +82,25 @@ export type PlushieFinish = 'gloss' | 'satin' | 'matte' | 'felt';
 export type PlushieEyes = 'dot' | 'oval' | 'googly' | 'ring' | 'happy' | 'sleepy' | 'none';
 export type PlushieMouth = 'none' | 'smile' | 'grin' | 'open' | 'flat' | 'cat';
 export type PlushieGlasses = 'none' | 'round' | 'square' | 'monocle' | 'shades';
-export type PlushieHat = 'none' | 'top' | 'beanie' | 'party' | 'crown';
+export type PlushieHat =
+  | 'none'
+  | 'top'
+  | 'beanie'
+  | 'party'
+  | 'crown'
+  | 'cowboy'
+  | 'cap'
+  | 'hardhat'
+  | 'fireman'
+  | 'santa'
+  | 'graduation'
+  | 'fez'
+  | 'halo';
+/** Worn below the mouth. */
+export type PlushieNeck = 'none' | 'bowtie' | 'necktie';
+/** A small piece pinned to the body: flower, bow and heart sit on the head, badge and star on the chest. */
+export type PlushiePin = 'none' | 'flower' | 'bow' | 'heart' | 'star' | 'badge';
+export type PlushieMoustache = 'none' | 'curly' | 'walrus' | 'pencil';
 
 
 // ---------------------------------------------------------------------------
@@ -1203,14 +1221,24 @@ function buildGlasses(
   return group;
 }
 
-/** Hat, built with its brim/base at y = 0. Returns the group and its height. */
+interface HatParts {
+  group: TGroup;
+  height: number;
+  crown: number;
+  brim: number;
+}
+
+/**
+ * Hat, built with its brim/base at y = 0. Returns the group, its height and
+ * the radii of its crown (what the head fills) and brim (what rests on it).
+ */
 function buildHat(
   k: Kit,
   style: PlushieHat,
   color: string | undefined,
   accent: string,
   fur: (geometry: TGeometry, color: string, length: number) => TMesh,
-): {group: TGroup; height: number} | null {
+): HatParts | null {
   const three = k.three;
   const group = new three.Group();
   switch (style) {
@@ -1227,7 +1255,7 @@ function buildHat(
       const band = new three.Mesh(new three.CylinderGeometry(0.305, 0.31, 0.085, 48), felt(k, accent));
       band.position.y = 0.09;
       group.add(crown, brim, rim, band);
-      return {group, height: 0.44};
+      return {group, height: 0.44, crown: 0.3, brim: 0.5};
     }
     case 'beanie': {
       const c = color ?? '#e0533d';
@@ -1239,7 +1267,7 @@ function buildHat(
       const pom = fur(new three.SphereGeometry(0.1, 32, 20), '#fbf6ec', 0.07);
       pom.position.y = 0.08 + 0.42 * 0.9 + 0.06;
       group.add(dome, cuff, pom);
-      return {group, height: 0.66};
+      return {group, height: 0.66, crown: 0.44, brim: 0.44};
     }
     case 'party': {
       const a = color ?? accent;
@@ -1258,7 +1286,7 @@ function buildHat(
       const pom = fur(new three.SphereGeometry(0.07, 28, 18), '#fdf7ea', 0.05);
       pom.position.y = 0.58;
       group.add(cone, pom);
-      return {group, height: 0.66};
+      return {group, height: 0.66, crown: 0.22, brim: 0.22};
     }
     case 'crown': {
       const gold = plastic(k, color ?? '#e8b949', {metal: true, roughness: 0.28});
@@ -1286,7 +1314,170 @@ function buildHat(
       const jewel = blob(k, plastic(k, accent, {roughness: 0.05}), 0.045, 0.045, 0.025);
       jewel.position.set(0, 0.12, 0.3);
       group.add(jewel);
-      return {group, height: 0.42};
+      return {group, height: 0.42, crown: 0.3, brim: 0.3};
+    }
+    case 'cowboy': {
+      const c = color ?? ACCESSORY_COLORS.hat.cowboy!;
+      const mat = felt(k, c);
+      mat.side = three.DoubleSide;
+      // Crown: a lathe with a crease pressed front to back and pinched sides.
+      const profile: V2[] = [[0.29, 0], [0.295, 0.1], [0.285, 0.22], [0.26, 0.31], [0.2, 0.355], [0.1, 0.37], [0, 0.365]];
+      const crownGeo = new three.LatheGeometry(profile.map(([x, y]) => new three.Vector2(x, y)), 64);
+      const p = crownGeo.getAttribute('position');
+      for (let i = 0; i < p.count; i++) {
+        const y = p.getY(i);
+        if (y < 0.2) continue;
+        const f = (y - 0.2) / 0.17;
+        p.setY(i, y - 0.075 * f * Math.exp(-((p.getX(i) / 0.08) ** 2)));
+        p.setX(i, p.getX(i) * (1 - 0.08 * f));
+      }
+      crownGeo.computeVertexNormals();
+      const crownMesh = new three.Mesh(crownGeo, mat);
+      // Brim: sides curl up, front and back dip a little.
+      const bend = (x: number, z: number) => 1.1 * Math.max(0, Math.abs(x) - 0.3) ** 2 - 0.05 * Math.max(0, Math.abs(z) - 0.3);
+      const brimMesh = new three.Mesh(brim(three, 0.27, 0.66, 0.52, 0, bend), mat);
+      const rim = tube(k, brimEdge(0.66, 0.52, 0, bend), 0.016, mat, true);
+      const band = new three.Mesh(new three.CylinderGeometry(0.296, 0.296, 0.055, 64, 1, true), felt(k, accent));
+      band.material.side = three.DoubleSide;
+      band.position.y = 0.045;
+      group.add(crownMesh, brimMesh, rim, band);
+      return {group, height: 0.38, crown: 0.3, brim: 0.66};
+    }
+    case 'cap': {
+      const c = color ?? ACCESSORY_COLORS.hat.cap!;
+      const mat = felt(k, c);
+      const crownMesh = new three.Mesh(dome(three, 0.38, 0.78), mat);
+      // The bill sticks out in front, tipped slightly down.
+      // A ring shifted forward: its back and sides stay hidden inside the dome.
+      mat.side = three.DoubleSide;
+      // Curved across and dipping down, so the level camera sees its top.
+      const billBend = (x: number, z: number) => -0.4 * Math.max(0, z - 0.28) - 0.25 * x * x * Math.min(1, Math.max(0, z - 0.2) * 4);
+      const bill = new three.Mesh(brim(three, 0.3, 0.34, 0.36, 0.27, billBend), mat);
+      const billRim = tube(k, brimEdge(0.34, 0.36, 0.27, billBend).filter(([, , z]) => z > 0.05), 0.012, mat);
+      const button = bead(k, c, 0.035, 0.022, 0.035, 'matte');
+      button.position.y = 0.38 * 0.78;
+      const seams = new three.Group();
+      const thread = threadMaterial(k, new three.Color(c).multiplyScalar(0.7).getStyle());
+      for (const a of [-1, 0, 1]) {
+        const th = a * 0.9;
+        const pts = arc(0, 0, 0.385, 8, 88, 20).map(([u, v]) => [Math.sin(th) * u, v * 0.78, Math.cos(th) * u] as P3);
+        seams.add(tube(k, pts, 0.006, thread));
+      }
+      // Worn turned a little, so the bill shows instead of pointing at the camera.
+      group.add(crownMesh, bill, billRim, button, seams);
+      group.rotation.y = 0.75;
+      return {group, height: 0.32, crown: 0.38, brim: 0.38};
+    }
+    case 'hardhat':
+    case 'fireman': {
+      const fire = style === 'fireman';
+      const c = color ?? ACCESSORY_COLORS.hat[style]!;
+      const mat = plastic(k, c, {roughness: 0.28});
+      mat.side = three.DoubleSide;
+      const shell = new three.Mesh(dome(three, 0.37, 0.88), mat);
+      // A ridge over the top, front to back.
+      const ridge = tube(k, arc(0, 0, 0.37, 30, 150, 24).map(([u, v]) => [0, v * 0.88, u] as P3), 0.028, mat);
+      // Hard hat: a short peak all round, longer at the front. Fire helmet: a long tail at the back.
+      const bend = fire
+        ? (_x: number, z: number) => -0.12 * Math.max(0, -z - 0.3) ** 1.2
+        : (_x: number, z: number) => -0.04 * Math.max(0, z - 0.3);
+      const [rx, rz, oz] = fire ? [0.5, 0.56, -0.12] : [0.45, 0.47, 0.07];
+      const brimMesh = new three.Mesh(brim(three, 0.36, rx, rz, oz, bend), mat);
+      brimMesh.position.y = 0.01;
+      const rim = tube(k, brimEdge(rx, rz, oz, bend), 0.016, mat, true);
+      rim.position.y = 0.01;
+      group.add(shell, ridge, brimMesh, rim);
+      if (fire) {
+        const shield = new three.Shape();
+        shield.moveTo(0.12, 0.04);
+        shield.absarc(0, 0.04, 0.12, 0, Math.PI, false);
+        shield.lineTo(-0.1, -0.08);
+        shield.quadraticCurveTo(0, -0.19, 0.1, -0.08);
+        shield.closePath();
+        const badge = puffy(k, shield, '#e8b949', 0.012, 0.012, 'gloss');
+        (badge.material as InstanceType<T3['MeshPhysicalMaterial']>).metalness = 1;
+        badge.position.set(0, 0.2, 0.36);
+        badge.rotation.x = -0.45;
+        const middle = blob(k, plastic(k, accent), 0.045, 0.045, 0.02);
+        middle.position.set(0, 0.215, 0.385);
+        middle.rotation.x = -0.45;
+        group.add(badge, middle);
+      }
+      return {group, height: 0.4, crown: 0.37, brim: 0.47};
+    }
+    case 'santa': {
+      const c = color ?? ACCESSORY_COLORS.hat.santa!;
+      const h = 0.62;
+      const geo = new three.ConeGeometry(0.33, h, 40, 24, true);
+      geo.translate(0, h / 2, 0);
+      // Flop the tip over to one side.
+      const p = geo.getAttribute('position');
+      for (let i = 0; i < p.count; i++) {
+        const t = Math.max(0, p.getY(i) / h);
+        p.setX(i, p.getX(i) + 0.34 * t ** 2.2);
+        p.setY(i, p.getY(i) - 0.2 * t ** 3);
+      }
+      geo.computeVertexNormals();
+      const cone = fur(geo, c, 0.025);
+      const cuff = fur(new three.TorusGeometry(0.335, 0.075, 18, 56), '#fbf6ec', 0.06);
+      cuff.rotation.x = Math.PI / 2;
+      cuff.position.y = 0.03;
+      const pom = fur(new three.SphereGeometry(0.085, 28, 18), '#fbf6ec', 0.07);
+      pom.position.set(0.34, h - 0.2 + 0.01, 0);
+      group.add(cone, cuff, pom);
+      return {group, height: 0.56, crown: 0.34, brim: 0.41};
+    }
+    case 'graduation': {
+      const c = color ?? ACCESSORY_COLORS.hat.graduation!;
+      const mat = felt(k, c);
+      const skull = new three.Mesh(new three.CylinderGeometry(0.3, 0.31, 0.18, 48), mat);
+      skull.position.y = 0.09;
+      const board = new three.Mesh(new three.BoxGeometry(0.8, 0.03, 0.8), mat);
+      board.position.y = 0.195;
+      board.rotation.y = Math.PI / 4;
+      const button = bead(k, accent, 0.035, 0.02, 0.035, 'matte');
+      button.position.y = 0.215;
+      // The tassel cord runs to the front edge and hangs over it.
+      const cord = taperedTube(k, [[0, 0.215, 0], [0.15, 0.214, 0.15], [0.27, 0.21, 0.27], [0.3, 0.16, 0.3], [0.31, 0.06, 0.31]], () => 0.009);
+      const cordMat = threadMaterial(k, accent);
+      const tassel = new three.Mesh(new three.CylinderGeometry(0.014, 0.038, 0.12, 16), cordMat);
+      tassel.position.set(0.31, 0.0, 0.31);
+      group.add(skull, board, button, new three.Mesh(cord, cordMat), tassel);
+      return {group, height: 0.24, crown: 0.31, brim: 0.31};
+    }
+    case 'fez': {
+      const c = color ?? ACCESSORY_COLORS.hat.fez!;
+      const mat = felt(k, c);
+      const body = new three.Mesh(new three.CylinderGeometry(0.21, 0.27, 0.34, 48), mat);
+      body.position.y = 0.17;
+      const black = '#1d1b22';
+      const cordMat = threadMaterial(k, black);
+      const button = bead(k, black, 0.03, 0.015, 0.03, 'matte');
+      button.position.y = 0.345;
+      const cord = taperedTube(k, [[0, 0.345, 0], [0.12, 0.35, 0.05], [0.21, 0.32, 0.09], [0.24, 0.24, 0.11]], () => 0.008);
+      const tassel = new three.Mesh(new three.CylinderGeometry(0.012, 0.04, 0.13, 16), cordMat);
+      tassel.position.set(0.245, 0.17, 0.115);
+      group.add(body, button, new three.Mesh(cord, cordMat), tassel);
+      return {group, height: 0.36, crown: 0.27, brim: 0.27};
+    }
+    case 'halo': {
+      const c = color ?? ACCESSORY_COLORS.hat.halo!;
+      const ring = new three.Mesh(
+        new three.TorusGeometry(0.3, 0.036, 20, 72),
+        new three.MeshStandardMaterial({
+          color: c,
+          emissive: new three.Color(c),
+          emissiveIntensity: 0.55,
+          roughness: 0.35,
+          metalness: 0.2,
+          envMap: k.env,
+          envMapIntensity: 0.8,
+        }),
+      );
+      ring.rotation.x = Math.PI / 2 - 0.3;
+      ring.position.y = 0.3;
+      group.add(ring);
+      return {group, height: 0.36, crown: 0.3, brim: 0.3};
     }
     case 'none':
       return null;
@@ -1337,6 +1528,325 @@ function buildBowtie(k: Kit, color: string): TGroup {
   return group;
 }
 
+/** Default colour of each hat, neck piece and pin when its colour option is left out (missing ones use `accentColor`; the bow tie uses `featureColor`). */
+export const ACCESSORY_COLORS = {
+  hat: {
+    top: '#221f26',
+    beanie: '#e0533d',
+    crown: '#e8b949',
+    cowboy: '#b07a45',
+    cap: '#2f6fd6',
+    hardhat: '#f5b80f',
+    fireman: '#c8261d',
+    santa: '#d22b2b',
+    graduation: '#1d1b22',
+    fez: '#b3202a',
+    halo: '#ffd659',
+  } as Partial<Record<PlushieHat, string>>,
+  neck: {necktie: '#c43c3c'} as Partial<Record<PlushieNeck, string>>,
+  pin: {flower: '#fdf7ea', bow: '#e8436e', heart: '#e8436e', star: '#f5c518'} as Partial<Record<PlushiePin, string>>,
+};
+
+type P3 = [number, number, number];
+
+/** A tube whose radius follows `radius(u)` along the path, u = 0..1 (moustaches, tassel cords). */
+function taperedTube(k: Kit, points: P3[], radius: (u: number) => number, segments = 48) {
+  const three = k.three;
+  const curve = new three.CatmullRomCurve3(points.map(p => new three.Vector3(...p)), false, 'centripetal');
+  const radial = 12;
+  const geometry = new three.TubeGeometry(curve, segments, 1, radial, false);
+  const position = geometry.getAttribute('position');
+  const c = new three.Vector3();
+  const v = new three.Vector3();
+  for (let i = 0; i <= segments; i++) {
+    const u = i / segments;
+    curve.getPointAt(u, c);
+    const r = radius(u);
+    for (let j = 0; j <= radial; j++) {
+      const n = i * (radial + 1) + j;
+      v.fromBufferAttribute(position, n).sub(c).multiplyScalar(r).add(c);
+      position.setXYZ(n, v.x, v.y, v.z);
+    }
+  }
+  return geometry;
+}
+
+/** An extruded, softly bevelled shape centred on the origin — fuzzy felt when the finish is `felt`. */
+function puffy(k: Kit, shape: InstanceType<T3['Shape']>, color: string, depth: number, bevel: number, finish = k.finish): TMesh {
+  const geometry = new k.three.ExtrudeGeometry(shape, {
+    depth,
+    bevelEnabled: true,
+    bevelThickness: bevel,
+    bevelSize: bevel * 0.8,
+    bevelSegments: 5,
+    curveSegments: 24,
+  });
+  geometry.center();
+  return finish === 'felt' ? k.fuzzy(geometry, color, 0.008) : new k.three.Mesh(geometry, finishMaterial(k, color, finish));
+}
+
+function shapeFrom(three: T3, points: V2[]) {
+  const shape = new three.Shape();
+  points.forEach(([x, y], i) => (i ? shape.lineTo(x, y) : shape.moveTo(x, y)));
+  shape.closePath();
+  return shape;
+}
+
+function starShape(three: T3, r: number, points = 5, inner = 0.48) {
+  const raw: V2[] = Array.from({length: points * 2}, (_, i) => {
+    const th = Math.PI / 2 + (i * Math.PI) / points;
+    const rr = i % 2 ? r * inner : r;
+    return [Math.cos(th) * rr, Math.sin(th) * rr];
+  });
+  return shapeFrom(three, roundedPolygon(raw, r * 0.08, 4));
+}
+
+function heartShape(three: T3, r: number) {
+  const pts: V2[] = Array.from({length: 64}, (_, i) => {
+    const t = (i / 64) * Math.PI * 2;
+    return [
+      ((16 * Math.sin(t) ** 3) / 17) * r,
+      ((13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t)) / 17) * r,
+    ];
+  });
+  return shapeFrom(three, pts);
+}
+
+/** A grid lying on the body: `at(t)` gives the centre and half-width at t = 0 (top) .. 1 (bottom); `dy(s, t)` bends the row. */
+function bodyStrip(
+  three: T3,
+  at: (t: number) => [number, number, number],
+  z: (x: number, y: number) => number,
+  rows = 24,
+  cols = 6,
+  dy: (s: number, t: number) => number = () => 0,
+) {
+  const positions: number[] = [];
+  const uvs: number[] = [];
+  for (let r = 0; r <= rows; r++) {
+    const t = r / rows;
+    const [x, y, w] = at(t);
+    for (let c = 0; c <= cols; c++) {
+      const s = (c / cols) * 2 - 1;
+      const px = x + s * w;
+      const py = y + dy(s, t);
+      positions.push(px, py, z(px, py));
+      uvs.push(c / cols, 1 - t);
+    }
+  }
+  const index: number[] = [];
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const a = r * (cols + 1) + c;
+      const b = a + cols + 1;
+      index.push(a, b, a + 1, a + 1, b, b + 1);
+    }
+  }
+  const geometry = new three.BufferGeometry();
+  geometry.setAttribute('position', new three.Float32BufferAttribute(positions, 3));
+  geometry.setAttribute('uv', new three.Float32BufferAttribute(uvs, 2));
+  geometry.setIndex(index);
+  geometry.computeVertexNormals();
+  return geometry;
+}
+
+/** A dome (sphere cap) for caps and helmets, base at y = 0. */
+function dome(three: T3, r: number, squash: number) {
+  const geometry = new three.SphereGeometry(r, 48, 20, 0, Math.PI * 2, 0, Math.PI / 2);
+  geometry.scale(1, squash, 1);
+  return geometry;
+}
+
+/** A flat brim: an elliptical ring in the xz plane, `bend(x, z)` lifting it. */
+function brim(three: T3, inner: number, rx: number, rz: number, offsetZ: number, bend: (x: number, z: number) => number) {
+  const geometry = new three.RingGeometry(inner, 1, 96, 8);
+  const position = geometry.getAttribute('position');
+  for (let i = 0; i < position.count; i++) {
+    const x0 = position.getX(i);
+    const y0 = position.getY(i);
+    const d = Math.hypot(x0, y0);
+    // Ease from the inner circle out to the ellipse.
+    const f = (d - inner) / (1 - inner);
+    const a = Math.atan2(y0, x0);
+    const ex = Math.cos(a) * (inner + (rx - inner) * f);
+    const ez = Math.sin(a) * (inner + (rz - inner) * f) + offsetZ * f;
+    position.setXYZ(i, ex, bend(ex, ez), ez);
+  }
+  geometry.computeVertexNormals();
+  return geometry;
+}
+
+/** The outer edge of {@link brim}, for a rolled rim. */
+function brimEdge(rx: number, rz: number, offsetZ: number, bend: (x: number, z: number) => number, n = 96): P3[] {
+  return Array.from({length: n}, (_, i) => {
+    const a = (i / n) * Math.PI * 2;
+    const x = Math.cos(a) * rx;
+    const z = Math.sin(a) * rz + offsetZ;
+    return [x, bend(x, z), z] as P3;
+  });
+}
+
+function buildMoustache(k: Kit, style: PlushieMoustache, color: string): TGroup | null {
+  if (style === 'none') return null;
+  const three = k.three;
+  const group = new three.Group();
+  const material = finishMaterial(k, color, k.finish === 'gloss' ? 'satin' : k.finish);
+  const wrap = (geometry: ReturnType<typeof taperedTube>) => (k.finish === 'felt' ? k.fuzzy(geometry, color, 0.008) : new three.Mesh(geometry, material));
+  switch (style) {
+    case 'curly': {
+      // One stroke, thick under the nose, tapering out into a curl at each end.
+      const half: P3[] = [
+        [0.05, -0.008, 0.008],
+        [0.1, -0.016, 0.002],
+        [0.142, -0.004, -0.006],
+        [0.16, 0.026, -0.01],
+        [0.148, 0.05, -0.012],
+        [0.124, 0.046, -0.01],
+        [0.12, 0.03, -0.008],
+      ];
+      const path: P3[] = [
+        ...half.map(([x, y, z]) => [-x, y, z] as P3).reverse(),
+        [0, 0.002, 0.012],
+        ...half,
+      ];
+      const radius = (u: number) => 0.007 + 0.03 * Math.pow(Math.max(0, 1 - Math.abs(2 * u - 1)), 0.9);
+      group.add(wrap(taperedTube(k, path, radius, 96)));
+      break;
+    }
+    case 'walrus': {
+      const shape = new three.Shape();
+      shape.moveTo(0, 0.04);
+      shape.bezierCurveTo(-0.09, 0.07, -0.2, 0.04, -0.22, -0.075);
+      shape.bezierCurveTo(-0.15, -0.06, -0.07, -0.055, 0, -0.025);
+      shape.bezierCurveTo(0.07, -0.055, 0.15, -0.06, 0.22, -0.075);
+      shape.bezierCurveTo(0.2, 0.04, 0.09, 0.07, 0, 0.04);
+      const geometry = new three.ExtrudeGeometry(shape, {
+        depth: 0.02,
+        bevelEnabled: true,
+        bevelThickness: 0.022,
+        bevelSize: 0.016,
+        bevelSegments: 6,
+        curveSegments: 24,
+      });
+      geometry.center();
+      // Always hairy: a walrus is all bristle.
+      group.add(k.fuzzy(geometry, color, 0.02));
+      break;
+    }
+    case 'pencil':
+      for (const s of [-1, 1]) {
+        group.add(tube(k, [[s * 0.016, 0.004, 0], [s * 0.065, 0.012, 0], [s * 0.125, -0.004, 0]], 0.012, threadMaterial(k, color)));
+      }
+      break;
+  }
+  return group;
+}
+
+/** What a neck piece needs to know about the body (unit scale, inner-group coordinates). */
+interface NeckSite {
+  /** Height of the neck line. */
+  y: number;
+  /** Lowest point straight below `x` that is still well inside the body. */
+  floor: (x: number) => number;
+  /** Front surface height. */
+  front: (x: number, y: number) => number;
+}
+
+function buildNeck(k: Kit, style: PlushieNeck, color: string, accent: string, site: NeckSite): TGroup | null {
+  const three = k.three;
+  const group = new three.Group();
+  switch (style) {
+    case 'necktie': {
+      // Knot under the chin, blade lying on the belly down to a pointed tip.
+      const top = site.y;
+      const tip = Math.min(top - 0.24, Math.max(site.floor(0) + 0.04, top - 0.62));
+      const length = top - 0.05 - tip;
+      const blade = bodyStrip(
+        three,
+        t => [0, top - 0.05 - t * length, 0.042 + 0.05 * Math.min(1, t * 1.4)],
+        (x, y) => site.front(x, y) + 0.035,
+        28,
+        6,
+        // The bottom row's centre drops below its corners: a pointed tip.
+        (s, t) => -Math.max(0, (t - 0.86) / 0.14) * 0.07 * (1 - Math.abs(s)),
+      );
+      const cloth =
+        k.finish === 'felt'
+          ? k.fuzzy(blade, color, 0.008)
+          : new three.Mesh(
+              blade,
+              new three.MeshPhysicalMaterial({
+                map: stripeTexture(three, color, accent),
+                roughness: 0.5,
+                sheen: 0.4,
+                clearcoat: k.finish === 'gloss' ? 0.6 : 0.1,
+                side: three.DoubleSide,
+                envMap: k.env,
+                envMapIntensity: 0.6,
+              }),
+            );
+      group.add(cloth);
+      const knot = bead(k, color, 0.055, 0.05, 0.035);
+      knot.position.set(0, top - 0.02, site.front(0, top) + 0.06);
+      group.add(knot);
+      return group;
+    }
+    case 'bowtie':
+    case 'none':
+      return null;
+  }
+}
+
+function buildPin(k: Kit, style: PlushiePin, color: string): TGroup | null {
+  const three = k.three;
+  const group = new three.Group();
+  switch (style) {
+    case 'flower':
+      for (let i = 0; i < 5; i++) {
+        const th = (i / 5) * Math.PI * 2 + Math.PI / 2;
+        const petal = bead(k, color, 0.06, 0.036, 0.022);
+        petal.position.set(Math.cos(th) * 0.058, Math.sin(th) * 0.058, 0);
+        petal.rotation.z = th;
+        group.add(petal);
+      }
+      {
+        const middle = bead(k, '#f5c518', 0.04, 0.04, 0.03);
+        middle.position.z = 0.016;
+        group.add(middle);
+      }
+      break;
+    case 'bow': {
+      const bow = buildBowtie(k, color);
+      bow.scale.setScalar(0.5);
+      group.add(bow);
+      for (const s of [-1, 1]) {
+        const tail = tube(k, [[s * 0.012, -0.02, 0], [s * 0.04, -0.07, -0.005], [s * 0.065, -0.11, -0.01]], 0.016, finishMaterial(k, color, k.finish === 'felt' ? 'matte' : k.finish));
+        group.add(tail);
+      }
+      break;
+    }
+    case 'heart':
+      group.add(puffy(k, heartShape(three, 0.12), color, 0.02, 0.022));
+      break;
+    case 'star':
+      group.add(puffy(k, starShape(three, 0.13), color, 0.02, 0.02));
+      break;
+    case 'badge': {
+      // A round button badge: metal rim, coloured face, a white star.
+      const rim = new three.Mesh(new three.TorusGeometry(0.105, 0.014, 12, 48), plastic(k, '#c9ccd3', {metal: true, roughness: 0.25}));
+      const face = new three.Mesh(new three.CylinderGeometry(0.105, 0.105, 0.022, 48), plastic(k, color));
+      face.rotation.x = Math.PI / 2;
+      const star = puffy(k, starShape(three, 0.06), '#fdf7ea', 0.004, 0.006, 'gloss');
+      star.position.z = 0.016;
+      group.add(rim, face, star);
+      break;
+    }
+    case 'none':
+      return null;
+  }
+  return group;
+}
+
 // ---------------------------------------------------------------------------
 // The character.
 // ---------------------------------------------------------------------------
@@ -1379,11 +1889,15 @@ interface Spec {
   glasses: PlushieGlasses;
   hat: PlushieHat;
   hatSize: number;
-  bowtie: boolean;
+  neck: PlushieNeck;
+  pin: PlushiePin;
+  moustache: PlushieMoustache;
   featureColor: string;
   glassesColor: string;
   hatColor: string | undefined;
-  bowtieColor: string;
+  neckColor: string;
+  pinColor: string;
+  moustacheColor: string;
   accent: string;
   cheekColor: string;
   headroom: number;
@@ -1442,6 +1956,91 @@ const FACE_LIFT: Partial<Record<PlushieKind, number>> = {
   bean: -0.04,
 };
 
+function insidePolygon(poly: V2[], x: number, y: number) {
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const [xi, yi] = poly[i];
+    const [xj, yj] = poly[j];
+    if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+
+/** How far you can walk from (x, y) along (dx, dy) and stay `margin` inside the outline. */
+function reach(poly: V2[], x: number, y: number, dx: number, dy: number, margin = 0) {
+  const l = Math.hypot(dx, dy);
+  let d = 0;
+  while (d < 3) {
+    const px = x + ((d + 0.005) * dx) / l;
+    const py = y + ((d + 0.005) * dy) / l;
+    if (!insidePolygon(poly, px, py) || distanceToOutline(px, py, poly) < margin) break;
+    d += 0.005;
+  }
+  return d;
+}
+
+/**
+ * Where a hat goes: on the highest point of the outline, standing along the
+ * outline's normal there (taken across a short stretch, so a soft peak gives
+ * a steady direction), leaned over by {@link HAT_TILT}. A heart wears it on a lobe.
+ */
+/** The jaunty lean every hat gets on top of the surface normal (radians, clockwise). */
+const HAT_TILT = 0.2;
+
+function hatTilt(outline: V2[]): {tilt: number; at: V2} {
+  let top = 0;
+  outline.forEach((p, i) => {
+    // Ties go to the right-hand tip (a heart's lobes).
+    if (p[1] + 1e-3 * p[0] > outline[top][1] + 1e-3 * outline[top][0]) top = i;
+  });
+  const n = outline.length;
+  // On a flat top, the middle of the flat stretch rather than either end of it.
+  const flat = (i: number) => outline[i][1] > outline[top][1] - 0.015;
+  let from = top;
+  let to = top;
+  for (let k = 0; k < n && flat((from - 1 + n) % n); k++) from = (from - 1 + n) % n;
+  for (let k = 0; k < n && flat((to + 1) % n); k++) to = (to + 1) % n;
+  top = (from + Math.round((((to - from) % n) + n) % n / 2)) % n;
+  const walk = (dir: number) => {
+    let i = top;
+    let d = 0;
+    while (d < 0.15) {
+      const j = (i + dir + n) % n;
+      d += Math.hypot(outline[j][0] - outline[i][0], outline[j][1] - outline[i][1]);
+      i = j;
+    }
+    return outline[i];
+  };
+  // The outline runs counter-clockwise: at a flat top the chord points left
+  // (angle π), which is a tilt of 0.
+  const [a, b] = [walk(-1), walk(1)];
+  let tilt = Math.atan2(b[1] - a[1], b[0] - a[0]) - Math.PI;
+  if (tilt < -Math.PI) tilt += Math.PI * 2;
+  return {tilt: tilt - HAT_TILT, at: outline[top]};
+}
+
+/**
+ * Seat a hat: along its own up axis, raise it until the brim clears the
+ * outline under it (sinking a touch into the fur) and the crown takes no more
+ * than a little of the head — a point (triangle, drop) pokes up into the crown,
+ * a round top fills it.
+ */
+function seatHat(outline: V2[], tilt: number, at: V2, crown: number, brim: number, size: number): V2 {
+  const right: V2 = [Math.cos(tilt), Math.sin(tilt)];
+  const up: V2 = [-Math.sin(tilt), Math.cos(tilt)];
+  const c = at[0] * right[0] + at[1] * right[1];
+  let inCrown = -Infinity;
+  let underBrim = -Infinity;
+  for (const [x, y] of outline) {
+    const l = Math.abs(x * right[0] + y * right[1] - c);
+    const h = x * up[0] + y * up[1];
+    if (l <= crown * size) inCrown = Math.max(inCrown, h);
+    else if (l <= brim * size) underBrim = Math.max(underBrim, h);
+  }
+  const base = Math.max(inCrown - 0.12 * size, underBrim - 0.02 * size);
+  return [right[0] * c + up[0] * base, right[1] * c + up[1] * base];
+}
+
 function buildRig(three: T3, spec: Spec): Rig {
   const env = studioEnvironment(three, spec.renderer);
   const strand = 0.0115 * spec.furGrain;
@@ -1479,9 +2078,7 @@ function buildRig(three: T3, spec: Spec): Rig {
     maxX = Math.max(maxX, Math.abs(x));
   }
   const bottom = minY;
-  // Top of the head along the middle — where a hat perches.
-  let top = -Infinity;
-  for (const [x, y] of outline) if (Math.abs(x) < 0.35) top = Math.max(top, y);
+  const perch = hatTilt(outline);
 
   const outer = new three.Group();
   const pivot = new three.Group();
@@ -1530,8 +2127,15 @@ function buildRig(three: T3, spec: Spec): Rig {
       eyes.push(eye);
     }
   }
+  const mouthY = eyeY - 0.2 - 0.04 * spec.eyeSize;
   const mouth = buildMouth(kit, spec.mouth, spec.featureColor);
-  if (mouth) place(mouth, cx, eyeY - 0.2 - 0.04 * spec.eyeSize);
+  if (mouth) place(mouth, cx, mouthY);
+  const moustache = buildMoustache(kit, spec.moustache, spec.moustacheColor);
+  if (moustache) {
+    // Over the top lip; an open mouth is taller.
+    const above = spec.mouth === 'none' ? 0.03 : spec.mouth === 'open' ? 0.11 : 0.075;
+    place(moustache, cx, mouthY + above, 0.015);
+  }
   if (spec.cheeks) {
     for (const s of [-1, 1]) {
       // Scaled in the geometry, not the mesh, so the fur keeps its length.
@@ -1567,37 +2171,83 @@ function buildRig(three: T3, spec: Spec): Rig {
       floaters[floaters.length - 1].rest = glasses.position.z;
     }
   }
-  if (spec.bowtie) {
-    const tie = buildBowtie(kit, spec.bowtieColor);
+  const worn: TObject[] = [face];
+  if (spec.neck === 'bowtie') {
+    const tie = buildBowtie(kit, spec.neckColor);
     tie.scale.setScalar(0.85);
     // Floats over the bottom seam, like a collar with no neck behind it.
     const y = bottom + 0.17;
     tie.position.set(0, y, surface(0, y) + 0.04);
-    tie.userData.bowtie = true;
     inner.add(tie);
+    worn.push(tie);
     floaters.push({object: tie, rest: tie.position.z, lift: 0.6});
+  } else if (spec.neck !== 'none') {
+    // The neck line sits under the mouth; neckwear lies on the body below it.
+    const y = Math.max(mouthY - 0.16, bottom + 0.3);
+    const neck = buildNeck(kit, spec.neck, spec.neckColor, spec.accent, {
+      y,
+      floor: x => y - reach(outline, x, y, 0, -1, 0.08),
+      front: (x, yy) => body.heightAt(x, yy),
+    });
+    if (neck) {
+      inner.add(neck);
+      worn.push(neck);
+      floaters.push({object: neck, rest: 0, lift: 0.4});
+    }
+  }
+
+  const pin = buildPin(kit, spec.pin, spec.pinColor);
+  if (pin) {
+    // Flower, bow and heart clip to the upper left of the head; badge and star to the chest.
+    const head = spec.pin === 'flower' || spec.pin === 'bow' || spec.pin === 'heart';
+    const angle = ((head ? 130 : -35) * Math.PI) / 180;
+    const dx = Math.cos(angle);
+    const dy = Math.sin(angle);
+    const r = reach(outline, cx, cy, dx, dy) * (head ? 0.74 : 0.6);
+    const x = cx + dx * r;
+    const y = cy + dy * r;
+    pin.position.set(x, y, surface(x, y) + 0.01);
+    // Face partly along the surface so it reads as pinned on, not pasted flat.
+    const e = 0.02;
+    const n = new three.Vector3(
+      -(body.heightAt(x + e, y) - body.heightAt(x - e, y)) / (2 * e),
+      -(body.heightAt(x, y + e) - body.heightAt(x, y - e)) / (2 * e),
+      1,
+    ).normalize();
+    n.lerp(new three.Vector3(0, 0, 1), 0.4).normalize();
+    pin.quaternion.setFromUnitVectors(new three.Vector3(0, 0, 1), n);
+    pin.rotateZ(head ? 0.35 : -0.2);
+    inner.add(pin);
+    worn.push(pin);
+    compensate.push(pin);
+    floaters.push({object: pin, rest: pin.position.z, lift: 0.5});
   }
 
   let hat: TGroup | null = null;
-  let hatTop = top;
-  const hatRest: [number, number] = [0, top];
+  let hatTop = perch.at[1];
+  let hatHalfWidth = 0;
+  const hatRest: [number, number] = [perch.at[0], perch.at[1]];
   const hatParts = buildHat(kit, spec.hat, spec.hatColor, spec.accent, fuzzy);
   if (hatParts) {
     hat = new three.Group();
+    hat.name = 'hat';
     hat.add(hatParts.group);
     hat.scale.setScalar(spec.hatSize);
-    // Hovering just over the head, a touch sunk so it reads as worn.
-    hatRest[1] = top - 0.1 * spec.hatSize;
-    hat.position.set(0, hatRest[1], 0);
-    hat.rotation.z = -0.12;
+    [hatRest[0], hatRest[1]] = seatHat(outline, perch.tilt, perch.at, hatParts.crown, hatParts.brim, spec.hatSize);
+    hat.position.set(hatRest[0], hatRest[1], 0);
+    hat.rotation.z = perch.tilt;
     inner.add(hat);
-    hatTop = hatRest[1] + (hatParts.height + 0.1) * spec.hatSize;
+    worn.push(hat);
+    hatTop = hatRest[1] + Math.cos(perch.tilt) * (hatParts.height + 0.1) * spec.hatSize;
+    hat.updateMatrixWorld(true);
+    const box = new three.Box3().setFromObject(hat);
+    hatHalfWidth = Math.max(-box.min.x, box.max.x);
   }
 
   // Every floating part beats the fur in depth (the fuzzy ones get the same
   // uniform through `fuzzy`).
   const biased = new Set<TMaterial>();
-  for (const root of [face, hat, inner.children.find(c => c.userData.bowtie)]) {
+  for (const root of worn) {
     root?.traverse(child => {
       const material = (child as TMesh).material as TMaterial | TMaterial[] | undefined;
       for (const m of Array.isArray(material) ? material : material ? [material] : []) {
@@ -1638,7 +2288,7 @@ function buildRig(three: T3, spec: Spec): Rig {
     floaters,
     shadow,
     bottom,
-    fitW: 2 * (maxX + 0.12),
+    fitW: 2 * Math.max(maxX + 0.12, hatHalfWidth + 0.04),
     fitH: fitTop - shadowBottom,
     fitMid: (fitTop + shadowBottom) / 2,
     furs,
@@ -1682,7 +2332,7 @@ export interface PlushieOptions {
   fabric?: PlushieFabric;
   /** Size of one fur strand; smaller is finer, denser fur. (default: from `fabric`) */
   furGrain?: number;
-  /** Surface of eyes, mouth, glasses and bow tie: gloss, satin, matte, felt. (default: 'satin') */
+  /** Surface of eyes, mouth, moustache, glasses, neckwear and pins: gloss, satin, matte, felt. (default: 'satin') */
   finish?: PlushieFinish;
   /** Eye style. (default: 'dot') */
   eyes?: PlushieEyes;
@@ -1696,23 +2346,35 @@ export interface PlushieOptions {
   mouth?: PlushieMouth;
   /** Blush discs under the eyes. (default: false) */
   cheeks?: boolean;
+  /** Moustache over the mouth. (default: 'none') */
+  moustache?: PlushieMoustache;
   /** Glasses. (default: 'none') */
   glasses?: PlushieGlasses;
-  /** Hat. (default: 'none') */
+  /** Hat. Silhouettes without a top in the middle (a heart) wear it on a tip. (default: 'none') */
   hat?: PlushieHat;
   /** Hat size multiplier. (default: 1) */
   hatSize?: number;
-  /** A bow tie floating at the bottom edge. (default: false) */
+  /** Neckwear: a bow tie at the bottom edge, or a necktie under the mouth. (default: 'none') */
+  neck?: PlushieNeck;
+  /** Shorthand for `neck: 'bowtie'`. */
   bowtie?: boolean;
+  /** A pin: flower, bow and heart on the head, star and badge on the chest. (default: 'none') */
+  pin?: PlushiePin;
   /** Eyes / mouth / eyebrows colour. (default: '#18130f') */
   featureColor?: string;
+  /** Moustache colour. (default: featureColor) */
+  moustacheColor?: string;
   /** Glasses frame colour. (default: featureColor) */
   glassesColor?: string;
-  /** Hat colour; each hat has a sensible default. */
+  /** Hat colour; each hat has a sensible default (see `ACCESSORY_COLORS`). */
   hatColor?: string;
-  /** Bow-tie colour. (default: featureColor) */
+  /** Neckwear colour. (default: featureColor for the bow tie, otherwise from `ACCESSORY_COLORS`) */
+  neckColor?: string;
+  /** Older name for `neckColor`. */
   bowtieColor?: string;
-  /** Second colour for hat bands, party-hat stripes and crown jewels. (default: '#5b6cff') */
+  /** Pin colour; each pin has a sensible default (the badge uses accentColor). */
+  pinColor?: string;
+  /** Second colour for hat bands and tassels, party-hat stripes, jewels and necktie stripes. (default: '#5b6cff') */
   accentColor?: string;
   /** Blush colour. (default: '#f08a9b') */
   cheekColor?: string;
@@ -1802,9 +2464,11 @@ export const DEFAULT_OPTIONS = {
   mouth: 'none',
   cheeks: false,
   glasses: 'none',
+  moustache: 'none',
   hat: 'none',
   hatSize: 1,
-  bowtie: false,
+  neck: 'none',
+  pin: 'none',
   featureColor: '#18130f',
   accentColor: '#5b6cff',
   cheekColor: '#f08a9b',
@@ -1823,7 +2487,12 @@ export const PLUSHIE_FINISHES: readonly PlushieFinish[] = ['gloss', 'satin', 'ma
 export const PLUSHIE_EYES: readonly PlushieEyes[] = ['dot', 'oval', 'googly', 'ring', 'happy', 'sleepy', 'none'];
 export const PLUSHIE_MOUTHS: readonly PlushieMouth[] = ['none', 'smile', 'grin', 'open', 'flat', 'cat'];
 export const PLUSHIE_GLASSES: readonly PlushieGlasses[] = ['none', 'round', 'square', 'monocle', 'shades'];
-export const PLUSHIE_HATS: readonly PlushieHat[] = ['none', 'top', 'beanie', 'party', 'crown'];
+export const PLUSHIE_HATS: readonly PlushieHat[] = [
+  'none', 'top', 'beanie', 'party', 'crown', 'cowboy', 'cap', 'hardhat', 'fireman', 'santa', 'graduation', 'fez', 'halo',
+];
+export const PLUSHIE_NECKS: readonly PlushieNeck[] = ['none', 'bowtie', 'necktie'];
+export const PLUSHIE_PINS: readonly PlushiePin[] = ['none', 'flower', 'bow', 'heart', 'star', 'badge'];
+export const PLUSHIE_MOUSTACHES: readonly PlushieMoustache[] = ['none', 'curly', 'walrus', 'pencil'];
 
 /** The default fur length of a fabric preset. */
 export function fabricFur(fabric: PlushieFabric = 'plush'): number {
@@ -1871,13 +2540,19 @@ export function createPlushie(
     mouth = 'none',
     cheeks = false,
     glasses = 'none',
+    moustache = 'none',
     hat = 'none',
     hatSize = 1,
     bowtie = false,
+    neck = bowtie ? 'bowtie' : 'none',
+    pin = 'none',
     featureColor = '#18130f',
+    moustacheColor,
     glassesColor,
     hatColor,
+    neckColor,
     bowtieColor,
+    pinColor,
     accentColor = '#5b6cff',
     cheekColor = '#f08a9b',
     headroom = 0.22,
@@ -1903,11 +2578,15 @@ export function createPlushie(
     glasses,
     hat,
     hatSize,
-    bowtie,
+    neck,
+    pin,
+    moustache,
     featureColor,
     glassesColor: glassesColor ?? featureColor,
     hatColor,
-    bowtieColor: bowtieColor ?? featureColor,
+    neckColor: neckColor ?? bowtieColor ?? (neck === 'bowtie' ? featureColor : ACCESSORY_COLORS.neck[neck] ?? accentColor),
+    pinColor: pinColor ?? ACCESSORY_COLORS.pin[pin] ?? accentColor,
+    moustacheColor: moustacheColor ?? featureColor,
     accent: accentColor,
     cheekColor,
     headroom,

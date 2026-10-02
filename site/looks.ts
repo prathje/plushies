@@ -27,7 +27,10 @@ export const GALLERY: NamedLook[] = [
   {name: 'Boo-bah', look: {kind: 'ghost', color: '#c98bf2', fabric: 'shaggy', eyes: 'googly', mouth: 'open', hat: 'party'}},
   {name: 'Professor Moss', look: {kind: 'squircle', color: '#8fd19e', fabric: 'felt', finish: 'felt', eyes: 'dot', mouth: 'flat', glasses: 'monocle', hat: 'top'}},
   {name: 'Tangerine Supreme', look: {kind: 'star', color: '#ffb35c', eyes: 'ring', mouth: 'grin', glasses: 'shades', hat: 'crown'}},
-  {name: 'Sleepy Moon', look: {kind: 'arch', color: '#f6e3b8', fabric: 'velvet', eyes: 'sleepy', mouth: 'cat', cheeks: true, bowtie: true, bowtieColor: '#5b3fb0'}},
+  {name: 'Sleepy Moon', look: {kind: 'arch', color: '#f6e3b8', fabric: 'velvet', eyes: 'sleepy', mouth: 'cat', cheeks: true, neck: 'bowtie', neckColor: '#5b3fb0'}},
+  {name: 'Sir Biscuit', look: {kind: 'circle', color: '#d9a66b', fabric: 'fleece', eyes: 'dot', mouth: 'smile', moustache: 'curly', glasses: 'round', hat: 'top', neck: 'necktie'}},
+  {name: 'Valentine', look: {kind: 'heart', color: '#e8574f', fabric: 'velvet', eyes: 'oval', mouth: 'cat', cheeks: true, hat: 'cowboy', pin: 'flower'}},
+  {name: 'Champ', look: {kind: 'egg', color: '#7cc4f4', eyes: 'happy', mouth: 'grin', hat: 'cap', pin: 'star'}},
 ];
 
 export const FOOTER_LOOK: Look = {kind: 'drop', color: '#7cc4f4', fabric: 'fleece', eyes: 'sleepy', mouth: 'smile', headroom: 0.05, shadow: false};

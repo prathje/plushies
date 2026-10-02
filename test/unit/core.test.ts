@@ -9,7 +9,10 @@ import {
   PLUSHIE_GLASSES,
   PLUSHIE_HATS,
   PLUSHIE_KINDS,
+  PLUSHIE_MOUSTACHES,
   PLUSHIE_MOUTHS,
+  PLUSHIE_NECKS,
+  PLUSHIE_PINS,
   createPlushie,
   fabricFur,
   plushieOutline,
@@ -46,14 +49,18 @@ describe('createPlushie', () => {
     plush.dispose();
   });
 
-  test('every fabric, eye, mouth, glasses and hat style builds', () => {
+  test('every fabric, eye, mouth, moustache, glasses, hat, neck and pin style builds', () => {
     const styles = [
       ...PLUSHIE_FABRICS.map(fabric => ({fabric})),
       ...PLUSHIE_EYES.map(eyes => ({eyes})),
       ...PLUSHIE_MOUTHS.map(mouth => ({mouth})),
       ...PLUSHIE_GLASSES.map(glasses => ({glasses})),
       ...PLUSHIE_HATS.map(hat => ({hat})),
-      {bowtie: true, cheeks: true, finish: 'felt' as const},
+      ...PLUSHIE_NECKS.map(neck => ({neck})),
+      ...PLUSHIE_PINS.map(pin => ({pin})),
+      ...PLUSHIE_MOUSTACHES.map(moustache => ({moustache})),
+      {neck: 'necktie' as const, pin: 'heart' as const, moustache: 'curly' as const, cheeks: true, finish: 'felt' as const},
+      ...PLUSHIE_KINDS.map(kind => ({kind, hat: 'cowboy' as const, neck: 'necktie' as const, pin: 'badge' as const})),
     ];
     for (const style of styles) createPlushie(THREE, style).dispose();
   });
@@ -62,6 +69,16 @@ describe('createPlushie', () => {
     const bare = meshCount(createPlushie(THREE).object);
     const dressed = meshCount(createPlushie(THREE, {glasses: 'round', hat: 'top', bowtie: true, mouth: 'smile'}).object);
     expect(dressed).toBeGreaterThan(bare);
+  });
+
+  test('bowtie: true is shorthand for neck: bowtie', () => {
+    expect(snapshot(createPlushie(THREE, {bowtie: true}).object)).toEqual(snapshot(createPlushie(THREE, {neck: 'bowtie'}).object));
+  });
+
+  test('a heart wears its hat on a lobe, a circle in the middle', () => {
+    const hatX = (kind: 'heart' | 'circle') => createPlushie(THREE, {kind, hat: 'top'}).object.getObjectByName('hat')!.position.x;
+    expect(Math.abs(hatX('heart'))).toBeGreaterThan(0.2);
+    expect(Math.abs(hatX('circle'))).toBeLessThan(0.05);
   });
 
   test('DEFAULT_OPTIONS are the defaults createPlushie applies', () => {

@@ -15,7 +15,7 @@ test('renders the hero, gallery and editor without errors', async () => {
   await page.waitForSelector('#hero-plush canvas', {timeout: 20_000});
   await page.waitForTimeout(800);
   expect(await drawnBytes(page, '#hero-plush canvas')).toBeGreaterThan(20_000);
-  expect(await page.locator('.look').count()).toBe(6);
+  expect(await page.locator('.look').count()).toBe(9);
   expect(await page.locator('#controls .group').count()).toBe(6);
   expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBe(0);
   expect(errors()).toEqual([]);
