@@ -244,7 +244,11 @@ export function mountPlushie(container: HTMLElement, three: ThreeModule, options
     },
     canvas,
     set(pose) {
-      for (const key of Object.keys(pose)) tweens.delete(key as Numeric);
+      // Settle replaced tweens so whoever awaits them (the idle loop) carries on.
+      for (const key of Object.keys(pose)) {
+        tweens.get(key as Numeric)?.done();
+        tweens.delete(key as Numeric);
+      }
       plushie.set(pose);
       invalidate();
     },
