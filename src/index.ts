@@ -2058,7 +2058,12 @@ function buildRig(three: T3, spec: Spec): Rig {
     });
     setFurColor(fur, toRgb(three, color));
     furs.push(fur);
-    return new three.Mesh(furShells(three, geometry, 10), fur.material);
+    const mesh = new three.Mesh(furShells(three, geometry, 10), fur.material);
+    // Fur shells blend but still write depth, so a fuzzy part drawn before the
+    // body would punch its faint outer shells through the body fur behind it
+    // (a halo of background round a Santa cuff). Draw the body first.
+    mesh.renderOrder = 1;
+    return mesh;
   };
   const kit: Kit = {
     three,
