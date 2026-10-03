@@ -1,5 +1,5 @@
 /** The drop-in viewer's lifecycle and look handling, from source, in a real browser. */
-import {afterAll, beforeAll, expect, test} from 'bun:test';
+import {afterAll, afterEach, beforeAll, expect, test} from 'bun:test';
 import {chromium, type Browser, type Page} from 'playwright';
 import lab from './fixtures/viewer-lab.html';
 
@@ -9,6 +9,11 @@ beforeAll(async () => {
   server = Bun.serve({port: 0, routes: {'/': lab}});
   browser = await chromium.launch({args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader']});
 });
+// A failed test never reaches its page.close(); a page left animating slows every later test.
+const pages: Page[] = [];
+afterEach(async () => {
+  await Promise.all(pages.splice(0).map(p => p.close().catch(() => {})));
+});
 afterAll(async () => {
   await browser?.close();
   server?.stop(true);
@@ -16,6 +21,7 @@ afterAll(async () => {
 
 async function open(): Promise<{page: Page; logs: string[]}> {
   const page = await browser.newPage();
+  pages.push(page);
   page.setDefaultTimeout(60_000);
   const logs: string[] = [];
   page.on('pageerror', e => logs.push(`error: ${e.message}`));
@@ -134,23 +140,31 @@ test('invalid options warn and fall back; NaN poses are ignored', async () => {
 
 test('chained steps keep their total duration', async () => {
   const {page} = await open();
-  const ms = await page.evaluate(async () => {
+  const {ms, frame} = await page.evaluate(async () => {
     const w = window as any;
     const a = w.mountPlushie(document.querySelector('#a'), w.THREE, {});
     // The first frame compiles the shaders.
     await a.to({turn: 5}, 0.01);
     await a.to({turn: 0}, 0.01);
+    let frames = 0;
+    let counting = true;
+    const count = () => { frames++; if (counting) requestAnimationFrame(count); };
+    requestAnimationFrame(count);
     const t = performance.now();
     await a.to({turn: 10}, 0.2);
     await a.to({turn: 20}, 0.2);
     await a.to({turn: 30}, 0.2);
     await a.to({turn: 40}, 0.2);
     await a.to({turn: 50}, 0.2);
-    return performance.now() - t;
+    const ms = performance.now() - t;
+    counting = false;
+    return {ms, frame: ms / Math.max(1, frames)};
   });
-  // Five 200 ms steps; without chaining each step adds up to a frame (slow under SwiftShader).
-  expect(ms).toBeLessThan(1000 + 250);
-  await page.close();
+  // Five 200 ms steps; without chaining each step overruns by part of a frame,
+  // about 2.5 frames in all. Chaining only bridges gaps up to 250 ms (2 × the
+  // frame gap ≤ 500 ms), so on a slower machine there's nothing to check.
+  if (frame > 200) return console.warn(`chained steps: ${frame.toFixed(0)} ms frames, skipped`);
+  expect(ms).toBeLessThan(1000 + Math.max(250, 1.5 * frame));
 }, 90_000);
 
 test('stop() halts a performance and the idle gesture where they are', async () => {
