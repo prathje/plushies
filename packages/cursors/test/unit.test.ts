@@ -1,7 +1,7 @@
 /** Pure parts: where a cursor hangs, and which ink reads on its colour. */
 import {expect, test} from 'bun:test';
 import {inks, parseColor} from '../src/dom';
-import {place, recoverMotion, type MotionState} from '../src/index';
+import {footprint, place, recoverMotion, separate, spots, type Claim, type MotionState} from '../src/index';
 
 const bounds = {left: 0, top: 0, right: 400, bottom: 300};
 const room = {x: 120, y: 40, up: 0};
@@ -46,6 +46,115 @@ test('points at the bottom-right corner of a box, else another that fits', () =>
 test('keeps the tip inside the visible area', () => {
   const at = place({x: 900, y: -50}, null, bounds, room, 1, undefined);
   expect([at.x, at.y]).toEqual([398, 2]);
+});
+
+const claim = (rank: number, options: ReturnType<typeof spots>, was?: Claim['was']): Claim => ({rank, options, room, vertical: 1, was});
+const corner = (p: {flipX: boolean; flipY: boolean}) => [p.flipX, p.flipY];
+
+test('footprint covers the label on the side it hangs, and what sticks out the other way', () => {
+  const tall = {x: 120, y: 40, up: 30};
+  expect(footprint({x: 100, y: 100, flipX: false, flipY: false}, tall, 1)).toEqual({left: 100, right: 220, top: 70, bottom: 140});
+  expect(footprint({x: 100, y: 100, flipX: true, flipY: true}, tall, 1)).toEqual({left: -20, right: 100, top: 60, bottom: 130});
+  // A design hanging above: flipped, it hangs below.
+  expect(footprint({x: 100, y: 100, flipX: false, flipY: true}, tall, -1)).toEqual({left: 100, right: 220, top: 70, bottom: 140});
+});
+
+test('spots: the best first, then the corners and side middles that fit', () => {
+  const box = {left: 140, top: 100, width: 100, height: 60};
+  const all = spots(null, box, bounds, room, 1, undefined);
+  expect(all[0]).toEqual({...place(null, box, bounds, room, 1, undefined), spot: 'bottom-right'});
+  expect(all.map(p => p.spot)).toEqual(['bottom-right', 'bottom-left', 'top-right', 'top-left', 'right', 'left', 'bottom', 'top']);
+  expect(all.map(p => [p.x, p.y, ...corner(p)])).toEqual([
+    [234, 154, false, false],
+    [146, 154, true, false],
+    [234, 106, false, true],
+    [146, 106, true, true],
+    [234, 130, false, false],
+    [146, 130, true, false],
+    [190, 154, false, false],
+    [190, 106, false, true],
+  ]);
+  // Near the right edge only the left-hanging ones fit.
+  const edge = spots(null, {left: 300, top: 100, width: 80, height: 60}, bounds, room, 1, undefined);
+  expect(edge.every(p => p.flipX)).toBe(true);
+  // At a point: the other ways of hanging off it.
+  expect(spots({x: 200, y: 150}, null, bounds, room, 1, undefined).map(corner)).toEqual([
+    [false, false],
+    [true, false],
+    [false, true],
+    [true, true],
+  ]);
+});
+
+test('separate: the first there keeps its spot, the newcomer hangs the other way', () => {
+  const box = {left: 140, top: 100, width: 100, height: 60};
+  const options = spots(null, box, bounds, room, 1, undefined);
+  const [older, newer] = separate([claim(2, options), claim(1, options)]).reverse();
+  expect(older).toEqual(options[0]);
+  expect(newer).toEqual(options[1]);
+  expect(newer).not.toEqual(older);
+});
+
+test('separate: at a box, each takes the clear spot it reaches by moving least', () => {
+  const box = {left: 140, top: 100, width: 100, height: 60};
+  const options = spots(null, box, bounds, room, 1, undefined);
+  const at = (x: number, y: number, flipX = false) => ({x, y, flipX, flipY: false});
+  const near = (rank: number, from: Claim['from'], held?: string): Claim => ({...claim(rank, options), nearest: true, from, held});
+  // Alone, from the top left: the top-left corner, not the bottom-right one.
+  expect(separate([near(1, at(0, 0))])[0].spot).toBe('top-left');
+  // From below on the right: the bottom-right one.
+  expect(separate([near(1, at(380, 290, true))])[0].spot).toBe('bottom-right');
+  // Two coming from the top left: the second takes the nearest spot left clear.
+  const [first, second] = separate([near(1, at(0, 0)), near(2, at(0, 10))]);
+  expect(first.spot).toBe('top-left');
+  expect(['left', 'top', 'bottom-left']).toContain(second.spot!);
+  // Right above the box's middle: a top corner, not the top middle (the plushie would sit on the box).
+  expect(separate([near(1, at(170, 40))])[0].spot).toMatch(/^top-(left|right)$/);
+  // …unless nothing else is clear.
+  const topLeft = options.filter(p => p.spot === 'top-left');
+  const cornerOrMiddle = options.filter(p => p.spot === 'top-left' || p.spot === 'top');
+  const [, fallback] = separate([{...claim(1, topLeft), nearest: true}, {...claim(2, cornerOrMiddle), nearest: true, from: at(150, 40)}]);
+  expect(fallback.spot).toBe('top');
+  // The spot it took on its way stays while clear, though another is nearer now.
+  expect(separate([near(1, at(380, 290, true), 'top-left')])[0].spot).toBe('top-left');
+  // Without a box, the best spot still comes first when clear.
+  const point = spots({x: 200, y: 150}, null, bounds, room, 1, undefined);
+  expect(separate([{...claim(1, point), from: at(390, 150, true)}])[0]).toEqual(point[0]);
+});
+
+test('separate: far apart, both keep their best spot', () => {
+  const a = spots({x: 20, y: 20}, null, bounds, room, 1, undefined);
+  const b = spots({x: 20, y: 200}, null, bounds, room, 1, undefined);
+  expect(separate([claim(1, a), claim(2, b)])).toEqual([a[0], b[0]]);
+});
+
+test('separate: a point target hangs the other way off its point', () => {
+  const a = spots({x: 200, y: 150}, null, bounds, room, 1, undefined);
+  const b = spots({x: 210, y: 160}, null, bounds, room, 1, undefined);
+  const [, second] = separate([claim(1, a), claim(2, b)]);
+  expect([second.x, second.y]).toEqual([210, 160]);
+  expect(corner(second)).not.toEqual([false, false]);
+});
+
+test('separate: with no clear spot, takes the one that overlaps least', () => {
+  const tiny = {left: 0, top: 0, right: 130, bottom: 50};
+  const a = spots({x: 5, y: 5}, null, tiny, room, 1, undefined);
+  const b = spots({x: 6, y: 6}, null, tiny, room, 1, undefined);
+  const [first, second] = separate([claim(1, a), claim(2, b)]);
+  expect(first).toEqual(a[0]);
+  expect(second).toEqual(b[0]);
+});
+
+test('separate: back on the best spot only once clear by the hysteresis', () => {
+  // The first one's footprint: x 50..170, y 50..90.
+  const a = spots({x: 50, y: 50}, null, bounds, room, 1, undefined);
+  // 12 px to its right and 10 px lower: clear by the gap, not by the gap + hysteresis.
+  const b = spots({x: 182, y: 100}, null, bounds, room, 1, undefined);
+  const away = b.find(p => p.flipY && !p.flipX)!;
+  expect(separate([claim(1, a), claim(2, b, away)])[1]).toEqual(away);
+  expect(separate([claim(1, a), claim(2, b)])[1]).toEqual(b[0]);
+  const far = spots({x: 190, y: 100}, null, bounds, room, 1, undefined);
+  expect(separate([claim(1, a), claim(2, far, away)])[1]).toEqual(far[0]);
 });
 
 test('ink: whichever reads better on the colour', () => {

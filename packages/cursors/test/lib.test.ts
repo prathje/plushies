@@ -118,7 +118,8 @@ test('scaled containers, canvases and other containers line up', async () => {
     // #a, which has a cursor layer of its own (nearer to the canvas).
     const canvas = document.querySelector('#cv') as HTMLCanvasElement;
     w.createPlushieCursor(null, {name: 'Inner', container: document.querySelector('#a')});
-    const b = w.createPlushieCursor(null, {name: 'B', container: document.querySelector('#outer')});
+    // Coming from below right, it takes the shape's bottom-right corner (the nearest).
+    const b = w.createPlushieCursor(null, {name: 'B', container: document.querySelector('#outer'), x: 610, y: 410});
     await b.pointAt(w.fromCanvas(canvas, {x: 100, y: 50, width: 200, height: 100}));
     // The tip is the cursor element's origin: its translate inside the layer.
     const layer = rect(b.element.parentElement!);
@@ -398,5 +399,49 @@ test('a hidden bobbing cursor stops animating', async () => {
   });
   expect(writes.shown).toBeGreaterThan(0);
   expect(writes.hidden).toBe(0);
+  await page.close();
+}, 60_000);
+
+test('cursors on one element take the nearest clear spots, and stay put when the other leaves', async () => {
+  const {page, logs} = await open();
+  const r = await page.evaluate(async () => {
+    const w = window as any;
+    const container = document.querySelector('#a')!;
+    const thing = document.querySelector('#thing')!;
+    // Everything a cursor draws, in viewport pixels.
+    const extent = (c: any) => {
+      const rects = [...c.element.querySelectorAll('*')].map((e: Element) => e.getBoundingClientRect()).filter((b: DOMRect) => b.width && b.height);
+      return {
+        left: Math.min(...rects.map((b: DOMRect) => b.left)),
+        top: Math.min(...rects.map((b: DOMRect) => b.top)),
+        right: Math.max(...rects.map((b: DOMRect) => b.right)),
+        bottom: Math.max(...rects.map((b: DOMRect) => b.bottom)),
+      };
+    };
+    const tip = (c: any) => new DOMMatrix(getComputedStyle(c.element).transform).transformPoint(new DOMPoint(0, 0));
+    const a = w.createPlushieCursor(null, {name: 'Ada', container, x: 500, y: 300});
+    const b = w.createPlushieCursor(null, {name: 'Bob', container, x: 520, y: 330});
+    a.status('Rewriting the headline');
+    b.status('Checking the colours');
+    await a.pointAt(thing);
+    const first = tip(a);
+    await b.pointAt(thing);
+    await new Promise(r => setTimeout(r, 300));
+    const [ea, eb] = [extent(a), extent(b)];
+    const apart = ea.right <= eb.left || eb.right <= ea.left || ea.bottom <= eb.top || eb.bottom <= ea.top;
+    const second = tip(b);
+    // The first one is gone: the second doesn't move.
+    a.dispose();
+    await new Promise(r => setTimeout(r, 900));
+    return {apart, first: [first.x, first.y], second: [second.x, second.y], after: [tip(b).x, tip(b).y]};
+  });
+  expect(r.apart).toBe(true);
+  // #thing is 100..260 × 120..180; both come from below right. The first takes
+  // the bottom-right corner, 6 px in (moves arrive within a pixel), the second another spot.
+  expect(Math.abs(r.first[0] - 254)).toBeLessThan(1);
+  expect(Math.abs(r.first[1] - 174)).toBeLessThan(1);
+  expect(Math.hypot(r.second[0] - 254, r.second[1] - 174)).toBeGreaterThan(20);
+  expect(Math.hypot(r.after[0] - r.second[0], r.after[1] - r.second[1])).toBeLessThan(1);
+  expect(errors(logs)).toEqual([]);
   await page.close();
 }, 60_000);

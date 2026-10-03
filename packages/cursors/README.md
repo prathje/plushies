@@ -53,6 +53,7 @@ The plushie is optional for each cursor:
 | `design` | `'live'` (default), `'buddy'` or `'island'`. |
 | `container` | Where the cursor lives (default: the page). Positions are in its pixels. |
 | `x`, `y` | Where it starts (default: the container's centre). |
+| `speed` | How fast the pointer travels, relative to the design's own pace; 2 halves move times (default: 0.75). Change it with `setSpeed(speed)`. |
 | `idle` | The plushie blinks, breathes and glances around between moves (default: true). |
 | `plushie` | Float a plushie with the pointer (default: true). |
 | `zIndex` | Stacking of the container's cursor layer (default: 2147483000). |
@@ -62,7 +63,7 @@ The plushie is optional for each cursor:
 Moves:
 
 - **`moveTo(x, y)`**: glides to a point in container pixels.
-- **`pointAt(target)`**: glides to whichever corner of the target leaves room for the label (bottom-right first) and keeps following the target as it moves. `release()` stops following.
+- **`pointAt(target)`**: glides to the nearest corner or left/right side of the target that leaves room for its label and isn't taken by another cursor (the top and bottom middles, where the plushie would float over the target, only when none is free), and keeps following the target as it moves. `release()` stops following.
 
 Both resolve with how the move ended:
 
@@ -97,7 +98,7 @@ Changing a cursor:
 
 Read-only: `element` (the cursor's element), `design`, and `viewer`, the plushie's [viewer](../plushies) (`hop`, `squish`, `look`, `restyle`, …) or `null` without a plushie.
 
-The plushie leans into its motion, turns toward where it's going, looks at what it points at and wobbles while it works. Movement uses springs, like the editor: the pointer eases out of rest and lands without overshoot, and the plushie trails it on a softer spring, never more than a short leash behind. Near the edges of the container's visible area the cursor mirrors itself so its label stays on screen (with some slack so it doesn't flicker at the edge), and its tip stays inside that area: a cursor whose target scrolls away waits at the edge. With `prefers-reduced-motion`, the plushie's idle loop, bob, sway and every CSS animation stop, and text appears at once.
+The plushie leans into its motion, turns toward where it's going, looks at what it points at and wobbles while it works. Movement uses springs, like the editor: the pointer eases out of rest and lands without overshoot, and the plushie trails it on a softer spring, never more than a short leash behind. Near the edges of the container's visible area the cursor mirrors itself so its label stays on screen (with some slack so it doesn't flicker at the edge), and its tip stays inside that area: a cursor whose target scrolls away waits at the edge. Cursors in one container keep their labels off each other: the one that got there first keeps its spot. At a target, a cursor takes the clear spot it reaches by moving least and keeps it while it stays clear; at a point it hangs right and below where it can, else another way off the point. With no clear spot left, it takes the one that overlaps least. With `prefers-reduced-motion`, the plushie's idle loop, bob, sway and every CSS animation stop, and text appears at once.
 
 All cursors share one `requestAnimationFrame` loop, which stops when nothing is animating: a cursor at rest costs nothing. Bobbing designs (`'live'`, and `'buddy'` with its plushie) and a busy plushie animate while they're visible, and a cursor following a target reads its box every frame; hidden cursors (`show(false)`), containers scrolled out of view and background tabs don't. Window resizes, scrolls and the container resizing wake resting cursors; a layout change they can't see (a new CSS transform on an ancestor) shows at the cursor's next call.
 

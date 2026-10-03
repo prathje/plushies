@@ -81,6 +81,8 @@ export interface PlushieCursorOptions {
   y?: number;
   /** The plushie blinks, breathes and glances around between moves. (default: true) */
   idle?: boolean;
+  /** How fast the pointer travels, relative to the design's own pace: 2 halves move times. (default: 0.75) */
+  speed?: number;
   /** Float a plushie with the pointer. False: just the pointer and its label. (default: true) */
   plushie?: boolean;
   /** Stacking of the container's cursor layer. (default: 2147483000) */
@@ -139,6 +141,8 @@ export interface PlushieCursor {
    */
   highlight(target: Target, options?: HighlightOptions): Highlight;
   setDesign(design: CursorDesign): void;
+  /** Change how fast the pointer travels (see `speed`). */
+  setSpeed(speed: number): void;
   setName(name: string): void;
   /** Change the accent colour (any CSS colour). */
   setColor(color: string): void;
@@ -389,6 +393,8 @@ export interface Flip {
   y: number;
   flipX: boolean;
   flipY: boolean;
+  /** Which spot on a box it is (from `spots`): 'bottom-right', 'right', … */
+  spot?: string;
 }
 
 /** Leave the flipped side only once this far back from the edge, not to flicker on it. */
@@ -464,6 +470,152 @@ export function place(
 }
 
 // ---------------------------------------------------------------------------
+// Separation: cursors in one container keep their labels off each other.
+
+/** What a placement covers: the tip, the label beside it and what sticks out the other way. */
+export function footprint(p: Flip, room: {x: number; y: number; up?: number}, vertical: 1 | -1): Bounds {
+  const up = room.up ?? 0;
+  const down = (p.flipY ? -vertical : vertical) === 1;
+  return {
+    left: p.flipX ? p.x - room.x : p.x,
+    right: p.flipX ? p.x : p.x + room.x,
+    top: down ? p.y - up : p.y - room.y,
+    bottom: down ? p.y + room.y : p.y + up,
+  };
+}
+
+/**
+ * Where the cursor could go, best first: `place`'s choice, then — pointing
+ * at a box — its other corners and the middles of its sides, each hanging
+ * outward (and named); at a point, the other ways of hanging off it. Only
+ * spots whose footprint fits the visible area follow the first.
+ */
+export function spots(
+  at: {x: number; y: number} | null,
+  box: Box | null,
+  bounds: Bounds,
+  room: {x: number; y: number; up?: number},
+  vertical: 1 | -1,
+  was: Flip | undefined,
+): Flip[] {
+  const first = place(at, box, bounds, room, vertical, was);
+  // Hanging below the tip / above it, in the design's terms.
+  const below = vertical === -1;
+  const above = vertical === 1;
+  let options: Flip[];
+  if (!box) {
+    options = [false, true].flatMap(flipY => [false, true].map(flipX => ({x: first.x, y: first.y, flipX, flipY})));
+  } else {
+    const left = Math.max(box.left, bounds.left) + INSET;
+    const right = Math.min(box.left + box.width, bounds.right) - INSET;
+    const top = Math.max(box.top, bounds.top) + INSET;
+    const bottom = Math.min(box.top + box.height, bounds.bottom) - INSET;
+    const midX = (left + right) / 2;
+    const midY = (top + bottom) / 2;
+    const away = vertical === 1 ? below : above;
+    options = [
+      {x: right, y: bottom, flipX: false, flipY: below, spot: 'bottom-right'},
+      {x: left, y: bottom, flipX: true, flipY: below, spot: 'bottom-left'},
+      {x: right, y: top, flipX: false, flipY: above, spot: 'top-right'},
+      {x: left, y: top, flipX: true, flipY: above, spot: 'top-left'},
+      {x: right, y: midY, flipX: false, flipY: away, spot: 'right'},
+      {x: left, y: midY, flipX: true, flipY: away, spot: 'left'},
+      {x: midX, y: bottom, flipX: false, flipY: below, spot: 'bottom'},
+      {x: midX, y: top, flipX: false, flipY: above, spot: 'top'},
+    ];
+  }
+  const fits = (p: Flip) => {
+    const f = footprint(p, room, vertical);
+    return f.left >= bounds.left && f.right <= bounds.right && f.top >= bounds.top && f.bottom <= bounds.bottom;
+  };
+  const same = (a: Flip, b: Flip) => Math.abs(a.x - b.x) < 0.5 && Math.abs(a.y - b.y) < 0.5 && a.flipX === b.flipX && a.flipY === b.flipY;
+  const named = options.find(p => same(p, first));
+  return [named ?? first, ...options.filter(p => fits(p) && !same(p, first))];
+}
+
+/** One cursor's say in `separate`. */
+export interface Claim {
+  /** Lower goes first and keeps its spot: the cursor that got there earlier. */
+  rank: number;
+  /** From `spots`, best first. */
+  options: Flip[];
+  room: {x: number; y: number; up?: number};
+  vertical: 1 | -1;
+  /** The spot it took last frame, if any. */
+  was?: Flip;
+  /** Where it is now (its tip, hanging as it does): of the other spots, it takes the nearest. */
+  from?: Flip;
+  /**
+   * Pointing at a box: take the nearest spot that is clear, best or not, and
+   * keep the one named here (taken on its way) while it stays clear.
+   */
+  nearest?: boolean;
+  held?: string;
+}
+
+/** Spots on a box from which the plushie floats over it. */
+const OVER = new Set(['top', 'bottom']);
+
+/** Clear space kept between two cursors' footprints (px). */
+const GAP = 6;
+
+const overlap = (a: Bounds, b: Bounds, gap: number) =>
+  Math.max(0, Math.min(a.right, b.right) + gap - Math.max(a.left, b.left)) *
+  Math.max(0, Math.min(a.bottom, b.bottom) + gap - Math.max(a.top, b.top));
+
+/** How far the middle of what a cursor shows moves between two spots. */
+function travel(a: Flip, b: Flip, room: {x: number; y: number; up?: number}, vertical: 1 | -1) {
+  const fa = footprint(a, room, vertical);
+  const fb = footprint(b, room, vertical);
+  return Math.hypot((fa.left + fa.right - fb.left - fb.right) / 2, (fa.top + fa.bottom - fb.top - fb.bottom) / 2);
+}
+
+/**
+ * Pick a spot per cursor (in `claims` order) so their footprints keep apart.
+ * In rank order, each takes its best option if that is clear of the cursors
+ * before it — they never move for it — else the clear one nearest to where
+ * it is (the one it already holds first), else the one that overlaps them
+ * least. Back on the best spot only once it is clear by the hysteresis too,
+ * not to flicker.
+ */
+export function separate(claims: Claim[]): Flip[] {
+  const chosen: Flip[] = new Array(claims.length);
+  const taken: Bounds[] = [];
+  const order = claims.map((_, i) => i).sort((a, b) => claims[a].rank - claims[b].rank);
+  for (const i of order) {
+    const {room, vertical, was, from, nearest, held} = claims[i];
+    let {options} = claims[i];
+    const area = (p: Flip, gap: number) => taken.reduce((sum, t) => sum + overlap(footprint(p, room, vertical), t, gap), 0);
+    const same = (p: Flip) => !!was && p.x === was.x && p.y === was.y && p.flipX === was.flipX && p.flipY === was.flipY;
+    let away = !!was && !same(options[0]);
+    if (nearest) {
+      // At a box: the spot it holds while clear, else the nearest — no best
+      // spot to go back to. The top and bottom middles put the plushie over
+      // the box: only when no corner or side is clear (and left for one).
+      const last = (p: Flip) => (p.spot && OVER.has(p.spot) ? 1e6 : 0);
+      const far = (p: Flip) => (held && p.spot === held && !OVER.has(held) ? -1 : last(p) + (from ? travel(from, p, room, vertical) : 0));
+      options = [...options].sort((a, b) => far(a) - far(b));
+      away = false;
+    } else {
+      // Off the best spot, it stays where it is while that is clear, else moves the least.
+      const far = (p: Flip) => (same(p) ? -1 : from ? travel(from, p, room, vertical) : 0);
+      options = [options[0], ...options.slice(1).sort((a, b) => far(a) - far(b))];
+    }
+    let pick = options.find((p, n) => area(p, n === 0 && away ? GAP + HYSTERESIS : GAP) === 0);
+    if (!pick) {
+      let least = Infinity;
+      for (const p of options) {
+        const a = area(p, GAP);
+        if (a < least - 0.5) [least, pick] = [a, p];
+      }
+    }
+    chosen[i] = pick!;
+    taken.push(footprint(pick!, room, vertical));
+  }
+  return chosen;
+}
+
+// ---------------------------------------------------------------------------
 // One ticker for every cursor and highlight: it reads every layout first,
 // then writes, and sleeps once everything has settled. Bobbing designs and
 // held targets keep it going, but only while their container is in view
@@ -488,14 +640,26 @@ function tick(now: number) {
   raf = 0;
   const dt = Math.min(0.064, (now - last) / 1000 || 0.016);
   last = now;
-  const cursors = [...awake];
+  // Resting cursors sharing a layer with a moving one take part too: they
+  // may have to make room for it (or get their spot back).
+  const cursors = [...new Set([...awake].flatMap(cursor => [...cursor.layer.cursors]))];
   const shown = shownMarks();
   for (const cursor of cursors) guard(() => cursor.measure());
   for (const mark of shown) guard(() => mark.measure());
+  for (const layer of new Set(cursors.map(cursor => cursor.layer))) guard(() => arrange([...layer.cursors]));
   for (const cursor of cursors) guard(() => cursor.step(dt, now));
   for (const mark of shown) guard(() => mark.apply());
   for (const cursor of cursors) guard(() => cursor.resting() && awake.delete(cursor));
   if (!raf && (awake.size || shownMarks().length)) raf = requestAnimationFrame(tick);
+}
+/** Spread a layer's cursors so their labels don't cover each other. */
+function arrange(cursors: CursorState[]) {
+  const live = cursors.flatMap(cursor => {
+    const claim = cursor.claim();
+    return claim ? [{cursor, claim}] : [];
+  });
+  const picks = separate(live.map(c => c.claim));
+  live.forEach((c, i) => c.cursor.settle(picks[i]));
 }
 function schedule() {
   if (raf) return;
@@ -521,6 +685,9 @@ const DESIGNS: Record<CursorDesign, (styles: StyleRoot) => Design> = {live: live
 /** Accents for cursors given neither a colour nor a plushie colour, in turn. */
 const PALETTE = ['#7c3aed', '#e8574f', '#2b7de9', '#2f9e57', '#f5a524', '#d6409f', '#0f9fb5'];
 let paletteNext = 0;
+
+/** The default `speed`: a little calmer than the designs' own pace. */
+const SPEED = 0.75;
 
 export interface Spring {
   x: number;
@@ -627,13 +794,20 @@ class Mark {
 
 /** Raised on every update, so the cursor that changed last is on top. */
 let stacking = 1;
+let ranks = 0;
 
 class CursorState {
   readonly element: HTMLElement;
   design!: Design;
   viewer: PlushieViewer | null = null;
   disposed = false;
-  private layer: Layer;
+  readonly layer: Layer;
+  /** When it last set off (a counter): cursors that got somewhere first keep their spot. */
+  private rank = ++ranks;
+  /** This frame's spot, from `arrange`. */
+  private next: Flip | null = null;
+  /** The spot on its target it took on its way there, kept while clear. */
+  private held: string | undefined;
   /** The point the pointer eases toward (it chases `goal`, so moves start gently). */
   private aim: Spring;
   private tip: Spring;
@@ -688,6 +862,7 @@ class CursorState {
     color ??= lookColor ?? PALETTE[paletteNext++ % PALETTE.length];
     if (!lookColor) this.options = {...options, look: {...options.look, color}};
     this.applyColor(color);
+    if (options.speed !== undefined) this.setSpeed(options.speed);
     this.mount(options.design ?? 'live');
     all.add(this);
     listen();
@@ -722,6 +897,16 @@ class CursorState {
     wake(this);
   }
 
+  private speed = SPEED;
+
+  setSpeed(speed: number) {
+    if (!finite(speed) || speed <= 0) {
+      warnOnce(`speed must be a positive number, got ${speed}`);
+      return;
+    }
+    this.speed = speed;
+  }
+
   get bare() {
     return !this.viewer;
   }
@@ -729,7 +914,8 @@ class CursorState {
   /** The design's motion, calmer without a plushie (if it says so) and with reduced motion. */
   private get motion(): Motion {
     const base = this.design.motion;
-    const motion = this.bare && this.design.bare?.motion ? {...base, ...this.design.bare.motion} : base;
+    const bare = this.bare && this.design.bare?.motion ? {...base, ...this.design.bare.motion} : base;
+    const motion = {...bare, tip: bare.tip * this.speed};
     return reducedMotion() ? {...motion, damping: 1, bob: 0, hop: 0} : motion;
   }
 
@@ -810,16 +996,38 @@ class CursorState {
     this.room = this.design.room(this.bare);
   }
 
-  /** Write phase. */
-  step(dt: number, now: number) {
-    if (this.disposed || !this.frame) return;
+  /** Where it could go this frame, for `arrange` (null: it takes up no room). */
+  claim(): Claim | null {
+    this.next = null;
+    if (this.disposed || !this.frame) return null;
     if (this.target && !this.targetBox) {
       // The target is gone: stop following and stay put.
       this.target = null;
       this.finish('lost');
     }
+    const options = spots(this.targetBox ? null : this.goal, this.targetBox, this.frame.bounds, this.room, this.design.vertical, this.flip);
+    // Hidden, it takes its best spot and leaves room for the others.
+    if (this.hidden) {
+      this.next = options[0];
+      return null;
+    }
+    const from = {x: this.tip.x, y: this.tip.y, flipX: !!this.flip?.flipX, flipY: !!this.flip?.flipY};
+    const nearest = !!this.targetBox;
+    return {rank: this.rank, options, room: this.room, vertical: this.design.vertical, was: this.flip, from, nearest, held: this.held};
+  }
+
+  settle(spot: Flip) {
+    this.next = spot;
+    this.held = spot.spot;
+    // Moved aside while resting: keep ticking until it gets there.
+    if (spot.x !== this.goal.x || spot.y !== this.goal.y || spot.flipX !== this.flip?.flipX || spot.flipY !== this.flip?.flipY) wake(this);
+  }
+
+  /** Write phase. */
+  step(dt: number, now: number) {
+    if (this.disposed || !this.frame || !this.next) return;
     const box = this.targetBox;
-    const next = place(box ? null : this.goal, box, this.frame.bounds, this.room, this.design.vertical, this.flip);
+    const next = this.next;
     if (!this.flip || next.flipX !== this.flip.flipX || next.flipY !== this.flip.flipY) {
       this.element.classList.toggle('pc-flip-x', next.flipX);
       this.element.classList.toggle('pc-flip-y', next.flipY);
@@ -940,6 +1148,9 @@ class CursorState {
 
   private start(): Promise<MoveResult> {
     this.finish('superseded');
+    this.rank = ++ranks;
+    // A new target: pick its nearest spot afresh.
+    this.held = undefined;
     this.raise();
     wake(this);
     return new Promise(resolve => (this.move = resolve));
@@ -973,6 +1184,7 @@ class CursorState {
 
   release() {
     this.target = null;
+    this.held = undefined;
   }
 
   status(status: string | CursorStatus | null) {
@@ -1175,6 +1387,7 @@ export function createPlushieCursor(three: ThreeModule | null, options: PlushieC
     highlight: (target, options) => state.highlight(target, options),
     setDesign: kind => unlessDisposed(() => kind !== state.design.kind && state.mount(kind)),
     setName: name => state.setName(name),
+    setSpeed: speed => unlessDisposed(() => state.setSpeed(speed)),
     setColor: color => unlessDisposed(() => state.setColor(color)),
     setLook: look => unlessDisposed(() => state.setLook(look)),
     setPlushie: on => unlessDisposed(() => state.setPlushie(on)),
