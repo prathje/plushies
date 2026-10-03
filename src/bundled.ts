@@ -28,11 +28,12 @@ export {
   PLUSHIE_NECKS,
   PLUSHIE_PINS,
   fabricFur,
+  fabricGrain,
   plushieOutline,
 } from './index.js';
 export type * from './index.js';
 export {easeIn, easeInOut, easeOut} from './viewer.js';
-export type {Easing, PlushieViewer, ViewerOptions} from './viewer.js';
+export type {Easing, PlushieViewer, ViewerLook, ViewerOptions} from './viewer.js';
 export {THREE};
 
 /** Build a plushie for your own scene (uses the bundled three). */

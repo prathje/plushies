@@ -35,12 +35,58 @@ export type PlushieColor = string | Rgb | readonly number[];
 
 /**
  * Parse a colour to sRGB 0..1. Hex is decoded exactly (byte / 255) so the
- * fur colour matches other renderers bit for bit; other CSS forms go through
- * three's parser.
+ * fur colour matches other renderers bit for bit. `rgb()` / `hsl()` are parsed
+ * here in both the comma and the modern space syntax; anything else (names,
+ * `oklch()`, `lab()`, `color()`) is resolved by the browser. An unknown
+ * colour warns once and falls back to the default fur colour.
  */
 function toRgb(three: T3, color: PlushieColor): Rgb {
-  if (typeof color !== 'string') return [color[0], color[1], color[2]];
-  const hex = /^#([0-9a-f]{3,8})$/i.exec(color.trim());
+  if (typeof color !== 'string') {
+    const rgb = [color[0], color[1], color[2]].map(v => (Number.isFinite(v) ? Math.max(0, Math.min(1, v)) : 0));
+    return rgb as Rgb;
+  }
+  const cached = COLORS.get(color);
+  if (cached) return cached;
+  const rgb = parseColor(three, color) ?? unknownColor(three, color);
+  if (COLORS.size > 256) COLORS.clear();
+  COLORS.set(color, rgb);
+  return rgb;
+}
+
+const COLORS = new Map<string, Rgb>();
+
+/** Any colour the plushie accepts, as `#rrggbb` for three's own parser. */
+function toHex(three: T3, color: string): string;
+function toHex(three: T3, color: string | undefined): string | undefined;
+function toHex(three: T3, color: string | undefined): string | undefined {
+  if (color === undefined) return undefined;
+  if (/^#[0-9a-f]{6}$/i.test(color)) return color;
+  return '#' + toRgb(three, color).map(v => Math.round(v * 255).toString(16).padStart(2, '0')).join('');
+}
+
+function unknownColor(three: T3, color: string): Rgb {
+  console.warn(`plushies: unknown colour ${JSON.stringify(color)}, using ${DEFAULT_COLOR}`);
+  return parseColor(three, DEFAULT_COLOR)!;
+}
+
+const DEFAULT_COLOR = '#f2b33d';
+
+/** CSS number or percentage: `pct` is what 100% means. */
+function cssNumber(token: string, pct: number): number {
+  return token.endsWith('%') ? (parseFloat(token) / 100) * pct : parseFloat(token);
+}
+
+function cssHue(token: string): number {
+  const v = parseFloat(token);
+  if (token.endsWith('turn')) return v * 360;
+  if (token.endsWith('grad')) return v * 0.9;
+  if (token.endsWith('rad')) return (v * 180) / Math.PI;
+  return v;
+}
+
+function parseColor(three: T3, input: string): Rgb | null {
+  const color = input.trim().toLowerCase();
+  const hex = /^#([0-9a-f]{3,8})$/.exec(color);
   if (hex && (hex[1].length === 3 || hex[1].length === 4)) {
     const h = hex[1];
     return [0, 1, 2].map(i => parseInt(h[i] + h[i], 16) / 255) as Rgb;
@@ -49,12 +95,60 @@ function toRgb(three: T3, color: PlushieColor): Rgb {
     const h = hex[1];
     return [0, 2, 4].map(i => parseInt(h.slice(i, i + 2), 16) / 255) as Rgb;
   }
-  const c = new three.Color().setStyle(color);
-  const out = {r: 0, g: 0, b: 0};
-  c.getRGB(out, three.SRGBColorSpace);
-  return [out.r, out.g, out.b];
+  if (hex) return null;
+  const fn = /^(rgba?|hsla?)\(\s*([^)]*)\)$/.exec(color);
+  if (fn) {
+    // "1 2 3 / .5", "1, 2, 3, .5" → the first three tokens.
+    const parts = fn[2].split(/[\s,/]+/).filter(Boolean);
+    if (parts.length < 3) return null;
+    let rgb: number[];
+    if (fn[1].startsWith('rgb')) {
+      rgb = parts.slice(0, 3).map(p => cssNumber(p, 255) / 255);
+    } else {
+      const h = (((cssHue(parts[0]) % 360) + 360) % 360) / 360;
+      const s = cssNumber(parts[1], 1);
+      const l = cssNumber(parts[2], 1);
+      const c = new three.Color().setHSL(h, Math.max(0, Math.min(1, s)), Math.max(0, Math.min(1, l)), three.SRGBColorSpace);
+      const out = {r: 0, g: 0, b: 0};
+      c.getRGB(out, three.SRGBColorSpace);
+      rgb = [out.r, out.g, out.b];
+    }
+    if (rgb.some(v => !Number.isFinite(v))) return null;
+    return rgb.map(v => Math.max(0, Math.min(1, v))) as Rgb;
+  }
+  if (/^[a-z]+$/.test(color) && color in three.Color.NAMES) {
+    return parseColor(three, '#' + (three.Color.NAMES as Record<string, number>)[color].toString(16).padStart(6, '0'));
+  }
+  return browserColor(color);
 }
 
+let probe: CanvasRenderingContext2D | null | undefined;
+
+/** Let the browser resolve any CSS colour by painting one pixel. */
+function browserColor(color: string): Rgb | null {
+  if (probe === undefined) {
+    try {
+      const canvas =
+        typeof OffscreenCanvas !== 'undefined'
+          ? new OffscreenCanvas(1, 1)
+          : typeof document !== 'undefined'
+            ? Object.assign(document.createElement('canvas'), {width: 1, height: 1})
+            : null;
+      probe = (canvas?.getContext('2d', {willReadFrequently: true}) as CanvasRenderingContext2D | null) ?? null;
+    } catch {
+      probe = null;
+    }
+  }
+  if (!probe || typeof CSS === 'undefined' || !CSS.supports('color', color)) return null;
+  probe.clearRect(0, 0, 1, 1);
+  probe.fillStyle = '#000';
+  probe.fillStyle = color;
+  probe.fillRect(0, 0, 1, 1);
+  const [r, g, b, a] = probe.getImageData(0, 0, 1, 1).data;
+  // Un-premultiply translucent colours; a fully transparent one has no hue.
+  const alpha = a / 255 || 1;
+  return [r, g, b].map(v => Math.min(1, v / 255 / alpha)) as Rgb;
+}
 
 /** Body silhouettes. */
 export type PlushieKind =
@@ -875,6 +969,11 @@ function shadowTexture(three: T3) {
  * gentle ambient wrap; without it glossy plastic and gold render flat.
  */
 const ENV_CACHE = new WeakMap<object, TTexture>();
+/** Forget the baked environment map of `renderer` (after its WebGL context was lost and restored). */
+export function resetEnvironment(renderer: TRenderer) {
+  ENV_CACHE.delete(renderer);
+}
+
 function studioEnvironment(three: T3, renderer: TRenderer | undefined): TTexture | null {
   if (!renderer) return null;
   try {
@@ -2504,6 +2603,11 @@ export function fabricFur(fabric: PlushieFabric = 'plush'): number {
   return (FABRICS[fabric] ?? FABRICS.plush).fur;
 }
 
+/** The default strand size (`furGrain`) of a fabric preset. */
+export function fabricGrain(fabric: PlushieFabric = 'plush'): number {
+  return (FABRICS[fabric] ?? FABRICS.plush).grain;
+}
+
 /**
  * The flat silhouette a plushie is inflated from, as a closed counter-clockwise
  * polyline fitted into [-1, 1] (y up). Handy for icons and hit areas.
@@ -2519,6 +2623,49 @@ export function plushieOutline(
 /** Number of fur shells drawn at most (each is one pass over the body). */
 export const MAX_FUR_SHELLS = FUR_SHELLS;
 
+const warned = new Set<string>();
+function warnOnce(message: string) {
+  if (warned.has(message)) return;
+  warned.add(message);
+  console.warn(`plushies: ${message}`);
+}
+
+/** One of `allowed`, or the default with a warning. */
+function oneOf<V extends string>(name: string, value: V | undefined, allowed: readonly V[], fallback: V): V {
+  if (value === undefined) return fallback;
+  if (allowed.includes(value)) return value;
+  warnOnce(`unknown ${name} ${JSON.stringify(value)}, using ${JSON.stringify(fallback)}`);
+  return fallback;
+}
+
+/** A finite number clamped to [min, max], or the default with a warning. */
+function within(name: string, value: number | undefined, fallback: number, min: number, max: number): number {
+  if (value === undefined) return fallback;
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    warnOnce(`${name} must be a number, got ${String(value)}; using ${fallback}`);
+    return fallback;
+  }
+  if (value < min || value > max) {
+    warnOnce(`${name} ${value} is outside ${min}..${max}; clamping`);
+    return Math.max(min, Math.min(max, value));
+  }
+  return value;
+}
+
+/** Pose updates with non-finite numbers dropped (they would poison later tweens). */
+function finitePose(next: Partial<PlushiePose>): Partial<PlushiePose> {
+  let out: Partial<PlushiePose> | null = null;
+  for (const key of Object.keys(next) as (keyof PlushiePose)[]) {
+    const value = next[key];
+    if (value === undefined || (typeof value === 'number' && !Number.isFinite(value))) {
+      if (value !== undefined) warnOnce(`pose ${key} must be a finite number, got ${String(value)}; ignored`);
+      out ??= {...next};
+      delete out[key];
+    }
+  }
+  return out ?? next;
+}
+
 /**
  * Build a plushie. `three` is your `three` module (`import * as THREE from 'three'`).
  * The second argument takes the look (`PlushieOptions`) and, optionally, the
@@ -2529,28 +2676,28 @@ export function createPlushie(
   options: PlushieOptions & Partial<PlushiePose> = {},
 ): Plushie {
   const {
-    kind = 'circle',
-    roundness = 0.6,
-    sides,
-    starInner = 0.55,
-    seed = 1,
-    thickness = 0.42,
-    fabric = 'plush',
-    furGrain,
-    finish = 'satin',
-    eyes = 'dot',
-    eyeSize = 1,
-    eyeSpacing = 1,
-    faceY = 0,
-    mouth = 'none',
+    kind: kindOption,
+    roundness: roundnessOption,
+    sides: sidesOption,
+    starInner: starInnerOption,
+    seed: seedOption,
+    thickness: thicknessOption,
+    fabric: fabricOption,
+    furGrain: furGrainOption,
+    finish: finishOption,
+    eyes: eyesOption,
+    eyeSize: eyeSizeOption,
+    eyeSpacing: eyeSpacingOption,
+    faceY: faceYOption,
+    mouth: mouthOption,
     cheeks = false,
-    glasses = 'none',
-    moustache = 'none',
-    hat = 'none',
-    hatSize = 1,
+    glasses: glassesOption,
+    moustache: moustacheOption,
+    hat: hatOption,
+    hatSize: hatSizeOption,
     bowtie = false,
-    neck = bowtie ? 'bowtie' : 'none',
-    pin = 'none',
+    neck: neckOption,
+    pin: pinOption,
     featureColor = '#18130f',
     moustacheColor,
     glassesColor,
@@ -2560,12 +2707,35 @@ export function createPlushie(
     pinColor,
     accentColor = '#5b6cff',
     cheekColor = '#f08a9b',
-    headroom = 0.22,
+    headroom: headroomOption,
     shadow = true,
     lights = true,
     renderer,
     ...initial
   } = options;
+  const kind = oneOf('kind', kindOption, PLUSHIE_KINDS, 'circle');
+  const roundness = within('roundness', roundnessOption, 0.6, 0, 1);
+  const sides = sidesOption === undefined ? undefined : Math.round(within('sides', sidesOption, 6, 3, 24));
+  const starInner = within('starInner', starInnerOption, 0.55, 0.2, 0.9);
+  const seed = within('seed', seedOption, 1, -1e9, 1e9);
+  const thickness = within('thickness', thicknessOption, 0.42, 0.05, 1.5);
+  const fabric = oneOf('fabric', fabricOption, PLUSHIE_FABRICS, 'plush');
+  const furGrain = furGrainOption === undefined ? undefined : within('furGrain', furGrainOption, 1, 0.1, 6);
+  const finish = oneOf('finish', finishOption, PLUSHIE_FINISHES, 'satin');
+  const eyes = oneOf('eyes', eyesOption, PLUSHIE_EYES, 'dot');
+  const eyeSize = within('eyeSize', eyeSizeOption, 1, 0.1, 4);
+  const eyeSpacing = within('eyeSpacing', eyeSpacingOption, 1, 0, 4);
+  const faceY = within('faceY', faceYOption, 0, -1, 1);
+  const mouth = oneOf('mouth', mouthOption, PLUSHIE_MOUTHS, 'none');
+  const glasses = oneOf('glasses', glassesOption, PLUSHIE_GLASSES, 'none');
+  const moustache = oneOf('moustache', moustacheOption, PLUSHIE_MOUSTACHES, 'none');
+  const hat = oneOf('hat', hatOption, PLUSHIE_HATS, 'none');
+  const hatSize = within('hatSize', hatSizeOption, 1, 0.1, 4);
+  const neck = oneOf('neck', neckOption, PLUSHIE_NECKS, bowtie ? 'bowtie' : 'none');
+  const pin = oneOf('pin', pinOption, PLUSHIE_PINS, 'none');
+  const headroom = within('headroom', headroomOption, 0.22, 0, 2);
+  const feature = toHex(three, featureColor);
+  const accent = toHex(three, accentColor);
   const preset = FABRICS[fabric] ?? FABRICS.plush;
   const spec: Spec = {
     kind,
@@ -2586,14 +2756,14 @@ export function createPlushie(
     neck,
     pin,
     moustache,
-    featureColor,
-    glassesColor: glassesColor ?? featureColor,
-    hatColor,
-    neckColor: neckColor ?? bowtieColor ?? (neck === 'bowtie' ? featureColor : ACCESSORY_COLORS.neck[neck] ?? accentColor),
-    pinColor: pinColor ?? ACCESSORY_COLORS.pin[pin] ?? accentColor,
-    moustacheColor: moustacheColor ?? featureColor,
-    accent: accentColor,
-    cheekColor,
+    featureColor: feature,
+    glassesColor: toHex(three, glassesColor) ?? feature,
+    hatColor: toHex(three, hatColor),
+    neckColor: toHex(three, neckColor ?? bowtieColor) ?? (neck === 'bowtie' ? feature : ACCESSORY_COLORS.neck[neck] ?? accent),
+    pinColor: toHex(three, pinColor) ?? ACCESSORY_COLORS.pin[pin] ?? accent,
+    moustacheColor: toHex(three, moustacheColor) ?? feature,
+    accent,
+    cheekColor: toHex(three, cheekColor),
     headroom,
     shadow,
     renderer,
@@ -2606,8 +2776,9 @@ export function createPlushie(
   object.add(rig.outer);
 
   const pose: PlushiePose = {...DEFAULT_POSE, fur: preset.fur};
-  for (const key of Object.keys(initial) as (keyof PlushiePose)[]) {
-    if (initial[key] !== undefined) (pose as unknown as Record<string, unknown>)[key] = initial[key];
+  const start = finitePose(initial);
+  for (const key of Object.keys(start) as (keyof PlushiePose)[]) {
+    (pose as unknown as Record<string, unknown>)[key] = start[key];
   }
   applyPose(rig, pose, toRgb(three, pose.color));
 
@@ -2615,7 +2786,7 @@ export function createPlushie(
     object,
     pose,
     set(next) {
-      Object.assign(pose, next);
+      Object.assign(pose, finitePose(next));
       applyPose(rig, pose, toRgb(three, pose.color));
     },
     dispose() {
