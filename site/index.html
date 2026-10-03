@@ -14,15 +14,15 @@
   <header class="top">
     <div class="brand"><span class="dot"></span>plushie cursors</div>
     <div class="seg" role="radiogroup" aria-label="Design" id="designs">
-      <button role="radio" data-design="live" aria-checked="true">Live <small>VideoZero</small></button>
-      <button role="radio" data-design="buddy" aria-checked="false">Buddy</button>
-      <button role="radio" data-design="island" aria-checked="false">Island</button>
-      <button role="radio" data-design="mixed" aria-checked="false">Mixed</button>
+      <button role="radio" data-design="live" aria-checked="true" tabindex="0">Live <small>VideoZero</small></button>
+      <button role="radio" data-design="buddy" aria-checked="false" tabindex="-1">Buddy</button>
+      <button role="radio" data-design="island" aria-checked="false" tabindex="-1">Island</button>
+      <button role="radio" data-design="mixed" aria-checked="false" tabindex="-1">Mixed</button>
     </div>
     <div class="top-actions">
       <label class="toggle"><input type="checkbox" id="plushies" checked /> Plushies</label>
       <label class="toggle"><input type="checkbox" id="follow" /> Pip follows me</label>
-      <button class="btn" id="pause">Pause</button>
+      <button class="btn" id="pause" aria-pressed="false" title="Stop the helpers' script where it is">Pause</button>
     </div>
   </header>
 
@@ -45,7 +45,7 @@
 
     <aside class="panel">
       <h2>Playground</h2>
-      <p class="muted">Take over one helper. Its script pauses while you drive.</p>
+      <p class="muted">Take over one helper. It drops its task and waits while you drive.</p>
       <label>Helper
         <select id="who"></select>
       </label>
