@@ -5,9 +5,10 @@ import lab from './fixtures/viewer-lab.html';
 
 let server: ReturnType<typeof Bun.serve>;
 let browser: Browser;
+const launch = () => chromium.launch({args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader']});
 beforeAll(async () => {
   server = Bun.serve({port: 0, routes: {'/': lab}});
-  browser = await chromium.launch({args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader']});
+  browser = await launch();
 });
 // A failed test never reaches its page.close(); a page left animating slows every later test.
 const pages: Page[] = [];
@@ -20,6 +21,12 @@ afterAll(async () => {
 });
 
 async function open(): Promise<{page: Page; logs: string[]}> {
+  // SwiftShader on a small CI runner has taken the whole browser down between
+  // tests; relaunch so one crash doesn't fail every test after it.
+  if (!browser.isConnected()) {
+    console.warn('viewer e2e: the browser disconnected (crashed?); relaunching');
+    browser = await launch();
+  }
   const page = await browser.newPage();
   pages.push(page);
   page.setDefaultTimeout(60_000);

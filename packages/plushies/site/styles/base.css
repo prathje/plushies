@@ -91,7 +91,10 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: var(--display-weight
 .brand-mark { width: 28px; height: 28px; }
 .brand-mark path { fill: var(--accent-2); }
 .brand-mark circle { fill: var(--ink); }
-.nav-links { display: flex; gap: 4px; margin-left: auto; }
+/* A wide fallback font (fonts not loaded yet, Linux) scrolls the links instead of pushing the theme button off screen. */
+.nav-links { display: flex; gap: 4px; margin-left: auto; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+.nav-links a { flex: none; }
+.brand, .theme-btn { flex: none; }
 .nav-links a { color: var(--ink-2); text-decoration: none; font-weight: 600; font-size: 0.95rem; padding: 8px 10px; border-radius: var(--r-pill); }
 .nav-links a:hover { color: var(--ink); background: color-mix(in oklab, var(--ink) 7%, transparent); }
 .icon-btn { display: grid; place-items: center; width: 40px; height: 40px; border-radius: var(--r-pill); border: 1px solid var(--line); background: var(--surface); color: var(--ink); cursor: pointer; }
