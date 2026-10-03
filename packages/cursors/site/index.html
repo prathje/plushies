@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>plushie cursors</title>
-  <meta name="description" content="Floating plushie cursors for AI helpers — three designs, on HTML or canvas." />
+  <meta name="description" content="Floating plushie cursors for AI helpers — three designs, on HTML or canvas, in six kinds of app." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600&family=Inter:wght@400;500;600;700&family=Nunito:wght@600;800&display=swap" />
@@ -33,10 +33,23 @@
       <button class="btn" id="pause" aria-pressed="false" title="Stop the helpers' script where it is">Pause</button>
     </div>
   </header>
+  <div class="cases">
+    <span class="cases-label">Use case</span>
+    <div class="seg" role="radiogroup" aria-label="Use case" id="scenes">
+      <button role="radio" data-scene="video" aria-checked="true" tabindex="0">Video editor</button>
+      <button role="radio" data-scene="design" aria-checked="false" tabindex="-1">Design file</button>
+      <button role="radio" data-scene="website" aria-checked="false" tabindex="-1">Website</button>
+      <button role="radio" data-scene="sheet" aria-checked="false" tabindex="-1">Spreadsheet</button>
+      <button role="radio" data-scene="doc" aria-checked="false" tabindex="-1">Document</button>
+      <button role="radio" data-scene="pipeline" aria-checked="false" tabindex="-1">Render pipeline</button>
+    </div>
+  </div>
 
   <main class="layout">
     <section class="workspace" id="workspace" aria-label="A mock video editor with AI helpers">
-      <div class="stage-wrap">
+
+      <!-- Video editor: an HTML slide and a canvas timeline. -->
+      <div class="scene" data-scene="video">
         <div class="stage" id="stage">
           <div class="logo" id="logo"><svg viewBox="0 0 32 32"><path d="M16 29C7 22 2 17 2 11a7 7 0 0 1 14-2 7 7 0 0 1 14 2c0 6-5 11-14 18z"/></svg>Plush&nbsp;Co.</div>
           <h1 class="headline" id="headline">Soft things, made to last.</h1>
@@ -44,11 +57,127 @@
           <div class="chart" id="chart" aria-label="Bar chart"><i style="--h:.45"></i><i style="--h:.7"></i><i style="--h:.55"></i><i style="--h:.9"></i></div>
           <button class="cta" id="cta" tabindex="-1">Shop the collection</button>
         </div>
+        <div class="timeline">
+          <div class="timeline-head"><span>Timeline</span><small>canvas</small></div>
+          <canvas id="timeline" aria-label="Timeline drawn on a canvas"></canvas>
+        </div>
       </div>
-      <div class="timeline">
-        <div class="timeline-head"><span>Timeline</span><small>canvas</small></div>
-        <canvas id="timeline" aria-label="Timeline drawn on a canvas"></canvas>
+
+      <!-- Design file: frames on a canvas, layers and properties. -->
+      <div class="scene" data-scene="design" hidden>
+        <div class="app fig" id="fig">
+          <div class="fig-side">
+            <b>Layers</b>
+            <ul>
+              <li>Page 1</li>
+              <li class="on" id="fig-layer">Hero / Desktop</li>
+              <li>Hero / Mobile</li>
+              <li>Components</li>
+              <li>Archive</li>
+            </ul>
+          </div>
+          <div class="fig-canvas">
+            <div class="frame desktop" id="fig-desktop" style="--brand:#7c3aed;--r:8px">
+              <span class="frame-name">Hero / Desktop</span>
+              <div class="nav"><i></i><i></i><i></i><i></i></div>
+              <div class="hero" id="fig-hero"><div class="lines"><i></i><i></i><i></i></div><div class="fig-img" id="fig-img" style="--img:linear-gradient(135deg, #f47c9a, #f5c518)"></div></div>
+              <div class="cards" id="fig-cards"><i></i><i></i><i></i></div>
+              <b class="fig-button" id="fig-button"></b>
+            </div>
+            <div class="frame mobile" id="fig-mobile" style="--brand:#7c3aed;--r:8px">
+              <span class="frame-name">Hero / Mobile</span>
+              <div class="nav"><i></i><i></i></div>
+              <div class="fig-img" style="--img:linear-gradient(135deg, #f47c9a, #f5c518)"></div>
+              <div class="lines"><i></i><i></i><i></i></div>
+              <div class="cards"><i></i><i></i></div>
+              <b class="fig-button"></b>
+            </div>
+          </div>
+          <div class="fig-side">
+            <b>Design</b>
+            <div class="prop">Fill <span id="fig-fill">#7C3AED</span></div>
+            <div class="prop">Radius <span id="fig-radius">8px</span></div>
+            <div class="prop">Width <span>1440</span></div>
+            <div class="prop">Auto layout <span>↓ 24</span></div>
+            <b>Export</b>
+            <div class="prop">PNG <span>2×</span></div>
+          </div>
+        </div>
       </div>
+
+      <!-- Website: a landing page in a browser window. -->
+      <div class="scene" data-scene="website" hidden>
+        <div class="app web" id="web">
+          <div class="browser-bar"><i></i><i></i><i></i><span class="url">plushco.shop</span></div>
+          <div class="web-page">
+            <nav class="web-nav" id="web-nav" style="--gap:3cqw"><b>Plush Co.</b><span>Shop</span><span>Story</span><span>Care</span><em>Cart (2)</em></nav>
+            <section class="web-hero">
+              <div>
+                <h3 id="web-h1">Soft things, made to last.</h3>
+                <p id="web-p">Hand-stitched from recycled felt, in a small workshop by the sea.</p>
+                <button id="web-cta" tabindex="-1" style="--cta:#7c3aed">Shop now</button>
+              </div>
+              <div class="web-img" id="web-img" style="--img:linear-gradient(135deg, #f47c9a, #f5c518)"></div>
+            </section>
+            <section class="web-cards" id="web-cards">
+              <div><b>Free shipping</b><p>On every order over €40, worldwide.</p></div>
+              <div><b>Made to last</b><p>Double seams and a lifetime repair promise.</p></div>
+              <div><b>Recycled felt</b><p>Soft, warm, and spun from old bottles.</p></div>
+            </section>
+            <footer class="web-footer" id="web-footer">© Plush Co. 2026 · Privacy · Terms</footer>
+          </div>
+        </div>
+      </div>
+
+      <!-- Spreadsheet: a grid built by scenes/sheet.ts. -->
+      <div class="scene" data-scene="sheet" hidden>
+        <div class="app sheet">
+          <div class="sheet-bar"><span class="ref" id="sheet-ref">C3</span><span class="fx" id="sheet-fx"></span></div>
+          <table id="sheet-table" aria-label="Sales by product"></table>
+        </div>
+      </div>
+
+      <!-- Document: a page with comments in the margin. -->
+      <div class="scene" data-scene="doc" hidden>
+        <div class="app doc">
+          <div class="doc-tools"><span class="on">B</span><span>I</span><span>U</span><i></i><span>H1</span><span>H2</span><i></i><span>• List</span><span>1. List</span><i></i><span>Comment</span></div>
+          <div class="doc-body">
+            <div class="doc-page">
+              <h3 id="doc-title">Caring for your plushie</h3>
+              <p class="byline">Plush Co. · Care guide · Draft 3</p>
+              <p id="doc-intro">A plushie that is loved gets dirty, and that is fine. This guide covers washing, drying and the small repairs that keep a well-loved friend together for years.</p>
+              <h4 id="doc-h2">Washing</h4>
+              <p id="doc-p2">Most plushies can go in the washing <mark>machien</mark> on a cold, gentle cycle. Put them in a pillowcase first so buttons and tags survive the spin.</p>
+              <ul id="doc-list">
+                <li>Cold water, gentle cycle</li>
+                <li>No bleach, no softener</li>
+                <li>Pillowcase or laundry bag</li>
+              </ul>
+              <h4>Repairs</h4>
+              <p>A loose seam is a five-minute fix with a ladder stitch. Eyes and noses are sewn on, never glued, so they can be replaced.</p>
+            </div>
+            <aside class="doc-comments">
+              <div class="comment" id="doc-comment"><b>Moss</b>Could we add drying tips here? Everyone asks.</div>
+              <div class="comment resolved"><b>Biscuit</b>Sentence case for the headings?</div>
+            </aside>
+          </div>
+        </div>
+      </div>
+
+      <!-- Render pipeline: nodes and wires (scenes/pipeline.ts draws the wires). -->
+      <div class="scene" data-scene="pipeline" hidden>
+        <div class="app pipe" id="pipe">
+          <svg id="pipe-wires" aria-hidden="true"></svg>
+          <div class="node" id="n-src" style="--x:3%;--y:14%;--c:#5b8def"><b>Source</b><span id="pipe-src">intro.mp4 · 00:00 – 00:12</span><i class="port out"></i></div>
+          <div class="node" id="n-grade" style="--x:29%;--y:8%;--c:#f2b33d"><b>Colour grade</b><span>Warmth <output id="pipe-warmth">+12</output> · Contrast 1.1</span><div class="bar"><i id="pipe-warmth-bar" style="--p:40%"></i></div><i class="port in"></i><i class="port out"></i></div>
+          <div class="node" id="n-caps" style="--x:55%;--y:14%;--c:#8fd19e"><b>Captions</b><span id="pipe-caps">Burn-in · en</span><i class="port in"></i><i class="port out"></i></div>
+          <div class="node" id="n-audio" style="--x:3%;--y:64%;--c:#f47c9a"><b>Audio</b><span>voice.wav · music.mp3</span><i class="port out"></i></div>
+          <div class="node" id="n-mix" style="--x:29%;--y:68%;--c:#f47c9a"><b>Mix</b><span>Duck music −12 dB · −14 LUFS</span><i class="port in"></i><i class="port out"></i></div>
+          <div class="node" id="n-encode" style="--x:55%;--y:56%;--c:#7c3aed"><b>Encode</b><span id="pipe-encode">H.265 · 1080p · 12 Mb/s</span><i class="port in a"></i><i class="port in b"></i><i class="port out"></i></div>
+          <div class="node" id="n-out" style="--x:78%;--y:36%;--c:#f5c518"><b>Output</b><span id="pipe-out">Preview · not rendered</span><div class="bar"><i id="pipe-render" style="--p:0%"></i></div><i class="port in"></i></div>
+        </div>
+      </div>
+
     </section>
 
     <aside class="panel">
@@ -77,6 +206,9 @@
         <button class="btn" id="b-done">Done</button>
       </div>
       <button class="btn ghost" id="b-resume">Resume script</button>
+      <hr />
+      <h2>This use case</h2>
+      <p class="muted" id="scene-note"></p>
       <hr />
       <h2>The three designs</h2>
       <ul class="notes">

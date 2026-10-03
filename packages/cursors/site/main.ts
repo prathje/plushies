@@ -1,91 +1,26 @@
 import * as THREE from 'three';
-import {createPlushieCursor, fromCanvas, paintHighlight, type CursorDesign, type Highlight, type PlushieCursor, type Target} from '../src/index';
-
-const $ = <T extends HTMLElement = HTMLElement>(s: string) => document.querySelector<T>(s)!;
-const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
-const rand = (a: number, b: number) => a + Math.random() * (b - a);
-const pick = <T,>(xs: readonly T[]) => xs[Math.floor(Math.random() * xs.length)];
+import {createPlushieCursor, type CursorDesign, type PlushieCursor} from '../src/index';
+import {design} from './scenes/design';
+import {doc} from './scenes/doc';
+import {$, pick, rand, sleep, type Scene, type Task, type Worker} from './scenes/kit';
+import {pipeline} from './scenes/pipeline';
+import {sheet} from './scenes/sheet';
+import {video} from './scenes/video';
+import {website} from './scenes/website';
 
 const workspace = $('#workspace');
 
 // ---------------------------------------------------------------------------
-// The canvas timeline: clips drawn on a <canvas>, glowing where a helper works.
+// The use cases: one mock app each, in the same workspace. One shows at a time
+// and the helpers work its tasks.
 
-const canvas = $<HTMLCanvasElement>('#timeline');
-const ctx = canvas.getContext('2d')!;
-interface Clip {
-  track: number;
-  start: number;
-  length: number;
-  color: string;
-  label: string;
-}
-const clips: Clip[] = [
-  {track: 0, start: 0, length: 3.2, color: '#7c3aed', label: 'Intro'},
-  {track: 0, start: 3.4, length: 4.1, color: '#5b8def', label: 'Headline'},
-  {track: 0, start: 7.7, length: 3.6, color: '#3e9b7a', label: 'Chart'},
-  {track: 1, start: 0.6, length: 5.2, color: '#f47c9a', label: 'Voice-over'},
-  {track: 1, start: 6.2, length: 4.4, color: '#f2b33d', label: 'Music'},
-];
-const SECONDS = 12;
-const view = {
-  get width() {
-    return canvas.clientWidth;
-  },
-  get height() {
-    return canvas.clientHeight;
-  },
-};
-/** A clip's box in the canvas's CSS pixels (what the drawing below uses too). */
-const clipBox = (clip: Clip) => {
-  const left = 64;
-  const scale = (view.width - left - 14) / SECONDS;
-  return {x: left + clip.start * scale, y: 16 + clip.track * 46, width: clip.length * scale, height: 36};
-};
-const canvasGlows = new Map<Clip, {color: string; busy: boolean}>();
-
-function drawTimeline(now: number) {
-  const dpr = Math.min(2, devicePixelRatio || 1);
-  const w = view.width;
-  const h = view.height;
-  if (canvas.width !== Math.round(w * dpr) || canvas.height !== Math.round(h * dpr)) {
-    canvas.width = Math.round(w * dpr);
-    canvas.height = Math.round(h * dpr);
-  }
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  ctx.clearRect(0, 0, w, h);
-  const theme = document.documentElement.dataset.theme;
-  const dark = theme ? theme === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
-  ctx.font = '600 11px Inter, sans-serif';
-  ctx.textBaseline = 'middle';
-  ['Video', 'Audio'].forEach((name, i) => {
-    ctx.fillStyle = dark ? '#a59a90' : '#7d7064';
-    ctx.fillText(name, 14, 34 + i * 46);
-  });
-  for (const clip of clips) {
-    const b = clipBox(clip);
-    ctx.fillStyle = clip.color;
-    ctx.beginPath();
-    ctx.roundRect(b.x, b.y, b.width, b.height, 7);
-    ctx.fill();
-    ctx.fillStyle = 'rgba(255,255,255,.95)';
-    ctx.fillText(clip.label, b.x + 10, b.y + b.height / 2);
-  }
-  // The glow, painted into the canvas by the app (paintHighlight).
-  for (const [clip, glow] of canvasGlows) paintHighlight(ctx, inflate(clipBox(clip), 3), glow.color, {busy: glow.busy, now, radius: 9});
-  const t = ((now / 1000) % SECONDS) / SECONDS;
-  const x = 64 + t * (w - 78);
-  ctx.fillStyle = dark ? '#f1ece6' : '#241c16';
-  ctx.fillRect(x - 1, 6, 2, h - 12);
-  requestAnimationFrame(drawTimeline);
-}
-const inflate = (b: {x: number; y: number; width: number; height: number}, d: number) => ({x: b.x - d, y: b.y - d, width: b.width + 2 * d, height: b.height + 2 * d});
-requestAnimationFrame(drawTimeline);
+const SCENES: Scene[] = [video, design, website, sheet, doc, pipeline];
+let scene = SCENES[0];
 
 // ---------------------------------------------------------------------------
 // The helpers.
 
-interface Helper {
+interface Helper extends Worker {
   name: string;
   color: string;
   mixed: CursorDesign;
@@ -134,121 +69,8 @@ const helpers: Helper[] = LOOKS.map((h, i) => ({
 }));
 
 // ---------------------------------------------------------------------------
-// Tasks: an HTML element or a canvas clip, a few steps, a change at the end.
-
-interface Task {
-  id: string;
-  text: string;
-  steps: string[];
-  finish: string;
-  click?: boolean;
-  target: () => Target;
-  glow: (h: Helper) => {clear(delay?: number): void};
-  apply: () => void;
-  /** Where the work happens, in viewport pixels (to keep helpers apart). */
-  rect?: () => {x: number; y: number; width: number; height: number};
-}
-
-const htmlGlow = (element: Element) => (h: Helper) => h.cursor.highlight(element) as Highlight;
-const clipGlow = (clip: Clip) => (h: Helper) => {
-  const glow = {color: h.color, busy: true};
-  canvasGlows.set(clip, glow);
-  return {
-    clear(delay = 0) {
-      // Only this glow: someone else may have picked the clip up since.
-      setTimeout(() => canvasGlows.get(clip) === glow && canvasGlows.delete(clip), delay * 1000);
-    },
-  };
-};
-const clipTarget = (clip: Clip) => () => fromCanvas(canvas, () => inflate(clipBox(clip), 3), view);
-const clipRect = (clip: Clip) => () => {
-  const r = canvas.getBoundingClientRect();
-  const b = clipBox(clip);
-  return {x: r.left + b.x, y: r.top + b.y, width: b.width, height: b.height};
-};
-
-const headlines = ['Soft things, made to last.', 'Hug-tested. Kid-approved.', 'Stuffed with care.', 'Made for squeezing.'];
-const ctaColors = ['#f5c518', '#f47c9a', '#8fd19e', '#7cc4f4'];
-let logoTurn = 0;
-
-const TASKS: Task[] = [
-  {
-    id: 'headline',
-    text: 'Rewriting the headline',
-    steps: ['Reading the brief', 'Trying a few options', 'Checking it fits on two lines'],
-    finish: 'Headline is punchier',
-    target: () => $('#headline'),
-    glow: htmlGlow($('#headline')),
-    apply: () => {
-      const el = $('#headline');
-      el.textContent = pick(headlines.filter(t => t !== el.textContent));
-    },
-  },
-  {
-    id: 'subtitle',
-    text: 'Fixing a typo',
-    steps: ['“stiched” → “stitched”'],
-    finish: 'Typo fixed',
-    target: () => $('#subtitle'),
-    glow: htmlGlow($('#subtitle')),
-    apply: () => {
-      const el = $('#subtitle');
-      el.textContent = el.textContent!.includes('stiched') ? 'Every plushie is hand-stitched from recycled felt.' : 'Every plushie is hand-stiched from recycled felt.';
-    },
-  },
-  {
-    id: 'chart',
-    text: 'Animating the bars',
-    steps: ['Loading Q3 numbers', 'Easing each bar in', 'Staggering by 80 ms'],
-    finish: 'Bars now grow in',
-    target: () => $('#chart'),
-    glow: htmlGlow($('#chart')),
-    apply: () => {
-      for (const bar of document.querySelectorAll<HTMLElement>('#chart i')) bar.style.setProperty('--h', rand(0.25, 0.95).toFixed(2));
-    },
-  },
-  {
-    id: 'cta',
-    text: 'Trying a warmer button colour',
-    steps: ['Checking contrast', 'Pressing it to test'],
-    finish: 'Button recoloured',
-    click: true,
-    target: () => $('#cta'),
-    glow: htmlGlow($('#cta')),
-    apply: () => {
-      const el = $('#cta');
-      el.style.background = pick(ctaColors.filter(c => c !== el.style.background));
-    },
-  },
-  {
-    id: 'logo',
-    text: 'Nudging the logo onto the grid',
-    steps: ['Measuring margins'],
-    finish: 'Logo aligned',
-    click: true,
-    target: () => $('#logo'),
-    glow: htmlGlow($('#logo')),
-    apply: () => {
-      logoTurn += 360;
-      $('#logo').style.transform = `rotate(${logoTurn}deg)`;
-    },
-  },
-  ...clips.map(
-    (clip): Task => ({
-      id: `clip-${clip.label}`,
-      text: clip.track ? `Levelling the ${clip.label.toLowerCase()}` : `Trimming “${clip.label}” to the beat`,
-      steps: clip.track ? ['Measuring loudness', 'Ducking under the voice'] : ['Finding the downbeat', 'Trimming 0.4 s'],
-      finish: clip.track ? `${clip.label} at −14 LUFS` : `${clip.label} on the beat`,
-      click: !clip.track,
-      target: clipTarget(clip),
-      rect: clipRect(clip),
-      glow: clipGlow(clip),
-      apply: () => {
-        if (!clip.track) clip.length = Math.max(2.4, Math.min(4.4, clip.length + rand(-0.5, 0.5)));
-      },
-    }),
-  ),
-];
+// The script: each helper picks a free task of the current use case, works it
+// and changes the page at the end.
 
 const QUIPS = ['Ooh, nice colours!', 'Hmm…', 'On it!', 'Back in a sec', 'This is fun', '✨'];
 
@@ -296,17 +118,17 @@ function interrupt(h: Helper, freeze: boolean) {
 }
 
 // Picking: keep helpers apart, so their boxes don't cover each other or the
-// clips they work on. One helper on the timeline at a time, and only targets
+// clips they work on. One helper on the canvas at a time, and only targets
 // well away from where the others are working (or being driven).
 const rectOf = (t: Task) => t.rect?.() ?? (t.target() as Element).getBoundingClientRect();
 const centreOf = (r: {x: number; y: number; width: number; height: number}) => ({x: r.x + r.width / 2, y: r.y + r.height / 2});
-const onTimeline = (t: Task) => !!t.rect;
+const onCanvas = (t: Task) => !!t.rect;
 
 function pickTask(h: Helper): Task | null {
-  const free = TASKS.filter(t => !claimed.has(t.id));
+  const free = scene.tasks.filter(t => !claimed.has(t.id));
   if (!free.length) return null;
   const others = helpers.filter(o => o !== h);
-  const busyOnTimeline = others.some(o => o.job && onTimeline(o.job.task));
+  const busyOnCanvas = others.some(o => o.job && onCanvas(o.job.task));
   // Others' spots: what they work on, or where you're driving them.
   const ws = workspace.getBoundingClientRect();
   const spots = others.flatMap(o => {
@@ -322,7 +144,7 @@ function pickTask(h: Helper): Task | null {
   const scored = free.map(t => {
     const c = centreOf(rectOf(t));
     const near = spots.reduce((m, s) => Math.min(m, Math.hypot(c.x - s.x, c.y - s.y)), Infinity);
-    return {t, near: busyOnTimeline && onTimeline(t) ? 0 : near};
+    return {t, near: busyOnCanvas && onCanvas(t) ? 0 : near};
   });
   const apart = scored.filter(s => s.near >= room);
   // Nothing far enough (a narrow screen, everyone busy): wait for a gap
@@ -402,32 +224,74 @@ helpers.forEach((h, i) => void run(h, 600 + i * 900));
 // ---------------------------------------------------------------------------
 // Controls.
 
-// The design radiogroup: one tab stop, arrows move the selection.
-const designGroup = $('#designs');
-const designButtons = [...designGroup.querySelectorAll<HTMLButtonElement>('button')];
-const setDesign = (design: string, remember = true) => {
-  for (const b of designButtons) {
-    const on = b.dataset.design === design;
-    b.setAttribute('aria-checked', String(on));
-    b.tabIndex = on ? 0 : -1;
-  }
-  for (const h of helpers) h.cursor.setDesign(design === 'mixed' ? h.mixed : (design as CursorDesign));
-  if (remember) history.replaceState(null, '', `?design=${design}`);
+/** Remember a choice in the URL, so a reload (or a shared link) comes back to it. */
+const remember = (key: string, value: string) => {
+  const params = new URLSearchParams(location.search);
+  params.set(key, value);
+  history.replaceState(null, '', `?${params}`);
 };
-for (const b of designButtons) b.addEventListener('click', () => setDesign(b.dataset.design!));
-designGroup.addEventListener('keydown', event => {
-  const i = designButtons.indexOf(document.activeElement as HTMLButtonElement);
-  if (i < 0) return;
-  const n = designButtons.length;
-  const next = {ArrowRight: i + 1, ArrowDown: i + 1, ArrowLeft: i - 1, ArrowUp: i - 1, Home: 0, End: n - 1}[event.key];
-  if (next === undefined) return;
-  event.preventDefault();
-  const b = designButtons[(next + n) % n];
-  setDesign(b.dataset.design!);
-  b.focus();
+
+/** A radiogroup of buttons: one tab stop, arrows move the selection, `attr` names the value. */
+function radiogroup(group: HTMLElement, attr: string, onPick: (value: string) => void) {
+  const buttons = [...group.querySelectorAll<HTMLButtonElement>('button')];
+  const select = (value: string) => {
+    for (const b of buttons) {
+      const on = b.dataset[attr] === value;
+      b.setAttribute('aria-checked', String(on));
+      b.tabIndex = on ? 0 : -1;
+    }
+    onPick(value);
+  };
+  for (const b of buttons) b.addEventListener('click', () => select(b.dataset[attr]!));
+  group.addEventListener('keydown', event => {
+    const i = buttons.indexOf(document.activeElement as HTMLButtonElement);
+    if (i < 0) return;
+    const n = buttons.length;
+    const next = {ArrowRight: i + 1, ArrowDown: i + 1, ArrowLeft: i - 1, ArrowUp: i - 1, Home: 0, End: n - 1}[event.key];
+    if (next === undefined) return;
+    event.preventDefault();
+    const b = buttons[(next + n) % n];
+    select(b.dataset[attr]!);
+    b.focus();
+  });
+  return {select, has: (value: string | null) => buttons.some(b => b.dataset[attr] === value)};
+}
+
+const params = new URLSearchParams(location.search);
+
+// The design: all helpers at once, or each in its own ("mixed").
+const designs = radiogroup($('#designs'), 'design', design => {
+  for (const h of helpers) h.cursor.setDesign(design === 'mixed' ? h.mixed : (design as CursorDesign));
+  remember('design', design);
 });
-const initial = new URLSearchParams(location.search).get('design');
-setDesign(designButtons.some(b => b.dataset.design === initial) ? initial! : 'live', !!initial);
+
+let booted = false;
+// The use case: show its mock app, and the helpers drop what they were doing
+// and scatter into it to pick up its tasks.
+const scenes = radiogroup($('#scenes'), 'scene', id => {
+  const next = SCENES.find(s => s.id === id)!;
+  const change = booted && next !== scene;
+  scene = next;
+  booted = true;
+  for (const s of SCENES) $(`.scene[data-scene="${s.id}"]`).hidden = s !== next;
+  workspace.setAttribute('aria-label', next.note);
+  $('#scene-note').textContent = next.note;
+  remember('scene', id);
+  if (!change) return;
+  const r = workspace.getBoundingClientRect();
+  for (const h of helpers) {
+    if (h.manual) continue;
+    interrupt(h, false);
+    void h.cursor.moveTo(rand(0.1, 0.9) * r.width, rand(0.15, 0.85) * r.height);
+  }
+});
+
+// Start where the URL says (remembering only when it did), else live + video.
+const initialDesign = params.get('design');
+const initialScene = params.get('scene');
+designs.select(designs.has(initialDesign) ? initialDesign! : 'live');
+scenes.select(scenes.has(initialScene) ? initialScene! : SCENES[0].id);
+if (!initialDesign && !initialScene) history.replaceState(null, '', location.pathname);
 
 // Pause stops the scripts mid-step: the cursors stop where they are and drop
 // what they were doing (a "done" message too). Play lets each script pick a
@@ -519,4 +383,4 @@ $('#b-resume').addEventListener('click', () => {
   }
 });
 
-Object.assign(window, {helpers});
+Object.assign(window, {helpers, scenes: SCENES});

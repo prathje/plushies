@@ -139,6 +139,6 @@ bun run test       # unit tests + browser tests (Playwright)
 bun run build      # dist/index.js and types
 ```
 
-The demo is published with the plushies site, at `cursors/`. It is a mock video editor: an HTML slide plus a timeline drawn on a canvas. Three helpers take turns working on both. The playground lets you take over one helper, and "Pip follows me" makes Pip trail your mouse.
+The demo is published with the plushies site, at `cursors/`. Three helpers take turns working in a mock app, and a "Use case" switch picks which one: a video editor (an HTML slide plus a timeline drawn on a canvas), a design file, a website, a spreadsheet, a document or a node-based render pipeline. Each lives in `site/scenes/` as a list of tasks (a target, a glow, a few steps, a change to the page). The design switch applies to all of them. The playground lets you take over one helper, and "Pip follows me" makes Pip trail your mouse.
 
 This package lives in the `plushies` monorepo; run `bun install` at the repo root and the commands above in `packages/cursors`. `plushies` is a workspace dependency (`workspace:*`), which `bun publish` replaces with its version.
