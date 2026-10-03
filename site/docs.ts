@@ -77,7 +77,7 @@ const VIEWER_API: [string, string][] = [
   ['view.to(pose, seconds, ease)', 'Tween numeric pose fields. Resolves when done.'],
   ['view.look(x, y)', 'Point the eyes, −1..1 each.'],
   ['view.hop(height) · view.squish() · view.blink()', 'Little performances with anticipation and settle. All return promises. <code>hop()</code> jumps as high as fits the container: a fifth of its height, at most 90 px.'],
-  ['view.stop()', 'Stop every running tween where it is; their promises resolve.'],
+  ['view.stop()', 'Halt everything where it is: tweens, hop/squish/blink and the current idle gesture. Their promises resolve; the idle loop resumes after its pause.'],
   ['view.restyle(options)', 'Change the look in place (new shape, fabric, hat…), keeping the pose. Merged into the current look: pass <code>undefined</code> to reset an option. Fur length resets to the new fabric\'s unless given.'],
   ['view.options', 'The current look: the mount options merged with every <code>restyle</code>.'],
   ['view.setIdle(on) · view.setFollowPointer(on)', 'Turn the idle loop and pointer-following on or off. Off-screen viewers pause rendering.'],

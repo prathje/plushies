@@ -71,10 +71,10 @@ function unknownColor(three: T3, color: string): Rgb {
 
 const DEFAULT_COLOR = '#f2b33d';
 
-/** CSS number or percentage: `pct` is what 100% means. */
-function cssNumber(token: string, pct: number): number {
-  return token.endsWith('%') ? (parseFloat(token) / 100) * pct : parseFloat(token);
-}
+const NUM = '[+-]?(?:\\d+\\.?\\d*|\\.\\d+)(?:e[+-]?\\d+)?';
+const IS_NUMBER = new RegExp(`^${NUM}$`);
+const IS_PERCENT = new RegExp(`^${NUM}%$`);
+const IS_HUE = new RegExp(`^${NUM}(?:deg|grad|rad|turn)?$`);
 
 function cssHue(token: string): number {
   const v = parseFloat(token);
@@ -82,6 +82,47 @@ function cssHue(token: string): number {
   if (token.endsWith('grad')) return v * 0.9;
   if (token.endsWith('rad')) return (v * 180) / Math.PI;
   return v;
+}
+
+/**
+ * `rgb()` / `hsl()` per CSS Color 4: the legacy comma syntax takes all
+ * numbers or all percentages for rgb and percentages for hsl's s and l; the
+ * space syntax mixes freely and reads hsl's bare numbers as percentages.
+ * Null for anything else (`none`, `calc()`, …) — the browser resolves those.
+ */
+function parseRgbHsl(three: T3, name: string, body: string): Rgb | null {
+  const legacy = body.includes(',');
+  let parts: string[];
+  let alpha: string | undefined;
+  if (legacy) {
+    parts = body.split(',').map(p => p.trim());
+    if (parts.length === 4) alpha = parts.pop();
+  } else {
+    const [main, a, extra] = body.split('/').map(p => p.trim());
+    if (extra !== undefined || a === '') return null;
+    parts = main.split(/\s+/).filter(Boolean);
+    alpha = a;
+  }
+  if (parts.length !== 3) return null;
+  if (alpha !== undefined && !IS_NUMBER.test(alpha) && !IS_PERCENT.test(alpha)) return null;
+  let rgb: number[];
+  if (name.startsWith('rgb')) {
+    const pct = parts.map(p => IS_PERCENT.test(p));
+    if (parts.some((p, i) => !pct[i] && !IS_NUMBER.test(p))) return null;
+    if (legacy && pct.some(v => v !== pct[0])) return null;
+    rgb = parts.map((p, i) => (pct[i] ? parseFloat(p) / 100 : parseFloat(p) / 255));
+  } else {
+    const [hue, ...sl] = parts;
+    if (!IS_HUE.test(hue)) return null;
+    if (sl.some(p => !IS_PERCENT.test(p) && (legacy || !IS_NUMBER.test(p)))) return null;
+    const [s, l] = sl.map(p => Math.max(0, Math.min(1, parseFloat(p) / 100)));
+    const h = (((cssHue(hue) % 360) + 360) % 360) / 360;
+    const out = {r: 0, g: 0, b: 0};
+    new three.Color().setHSL(h, s, l, three.SRGBColorSpace).getRGB(out, three.SRGBColorSpace);
+    rgb = [out.r, out.g, out.b];
+  }
+  if (rgb.some(v => !Number.isFinite(v))) return null;
+  return rgb.map(v => Math.max(0, Math.min(1, v))) as Rgb;
 }
 
 function parseColor(three: T3, input: string): Rgb | null {
@@ -96,26 +137,8 @@ function parseColor(three: T3, input: string): Rgb | null {
     return [0, 2, 4].map(i => parseInt(h.slice(i, i + 2), 16) / 255) as Rgb;
   }
   if (hex) return null;
-  const fn = /^(rgba?|hsla?)\(\s*([^)]*)\)$/.exec(color);
-  if (fn) {
-    // "1 2 3 / .5", "1, 2, 3, .5" → the first three tokens.
-    const parts = fn[2].split(/[\s,/]+/).filter(Boolean);
-    if (parts.length < 3) return null;
-    let rgb: number[];
-    if (fn[1].startsWith('rgb')) {
-      rgb = parts.slice(0, 3).map(p => cssNumber(p, 255) / 255);
-    } else {
-      const h = (((cssHue(parts[0]) % 360) + 360) % 360) / 360;
-      const s = cssNumber(parts[1], 1);
-      const l = cssNumber(parts[2], 1);
-      const c = new three.Color().setHSL(h, Math.max(0, Math.min(1, s)), Math.max(0, Math.min(1, l)), three.SRGBColorSpace);
-      const out = {r: 0, g: 0, b: 0};
-      c.getRGB(out, three.SRGBColorSpace);
-      rgb = [out.r, out.g, out.b];
-    }
-    if (rgb.some(v => !Number.isFinite(v))) return null;
-    return rgb.map(v => Math.max(0, Math.min(1, v))) as Rgb;
-  }
+  const fn = /^(rgba?|hsla?)\(\s*([^()]*)\)$/.exec(color);
+  if (fn) return parseRgbHsl(three, fn[1], fn[2]) ?? browserColor(color);
   if (/^[a-z]+$/.test(color) && color in three.Color.NAMES) {
     return parseColor(three, '#' + (three.Color.NAMES as Record<string, number>)[color].toString(16).padStart(6, '0'));
   }
@@ -144,10 +167,10 @@ function browserColor(color: string): Rgb | null {
   probe.fillStyle = '#000';
   probe.fillStyle = color;
   probe.fillRect(0, 0, 1, 1);
-  const [r, g, b, a] = probe.getImageData(0, 0, 1, 1).data;
-  // Un-premultiply translucent colours; a fully transparent one has no hue.
-  const alpha = a / 255 || 1;
-  return [r, g, b].map(v => Math.min(1, v / 255 / alpha)) as Rgb;
+  // getImageData is already un-premultiplied: a translucent colour reads back
+  // as its own RGB (to 8-bit precision); a fully transparent one as black.
+  const [r, g, b] = probe.getImageData(0, 0, 1, 1).data;
+  return [r, g, b].map(v => v / 255) as Rgb;
 }
 
 /** Body silhouettes. */
@@ -2638,6 +2661,14 @@ function oneOf<V extends string>(name: string, value: V | undefined, allowed: re
   return fallback;
 }
 
+/** A boolean, or the default with a warning (a string "false" would be truthy). */
+function flag(name: string, value: boolean | undefined, fallback: boolean): boolean {
+  if (value === undefined) return fallback;
+  if (typeof value === 'boolean') return value;
+  warnOnce(`${name} must be true or false, got ${JSON.stringify(value)}; using ${fallback}`);
+  return fallback;
+}
+
 /** A finite number clamped to [min, max], or the default with a warning. */
 function within(name: string, value: number | undefined, fallback: number, min: number, max: number): number {
   if (value === undefined) return fallback;
@@ -2690,12 +2721,12 @@ export function createPlushie(
     eyeSpacing: eyeSpacingOption,
     faceY: faceYOption,
     mouth: mouthOption,
-    cheeks = false,
+    cheeks: cheeksOption,
     glasses: glassesOption,
     moustache: moustacheOption,
     hat: hatOption,
     hatSize: hatSizeOption,
-    bowtie = false,
+    bowtie: bowtieOption,
     neck: neckOption,
     pin: pinOption,
     featureColor = '#18130f',
@@ -2708,11 +2739,15 @@ export function createPlushie(
     accentColor = '#5b6cff',
     cheekColor = '#f08a9b',
     headroom: headroomOption,
-    shadow = true,
-    lights = true,
+    shadow: shadowOption,
+    lights: lightsOption,
     renderer,
     ...initial
   } = options;
+  const cheeks = flag('cheeks', cheeksOption, false);
+  const bowtie = flag('bowtie', bowtieOption, false);
+  const shadow = flag('shadow', shadowOption, true);
+  const lights = flag('lights', lightsOption, true);
   const kind = oneOf('kind', kindOption, PLUSHIE_KINDS, 'circle');
   const roundness = within('roundness', roundnessOption, 0.6, 0, 1);
   const sides = sidesOption === undefined ? undefined : Math.round(within('sides', sidesOption, 6, 3, 24));

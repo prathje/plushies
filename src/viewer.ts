@@ -64,7 +64,11 @@ export interface PlushieViewer {
    * its default. Fur length resets to the new fabric's unless given.
    */
   restyle(options: ViewerLook & Partial<Pick<PlushiePose, 'color' | 'fur'>>): void;
-  /** Stop every running tween where it is; their promises resolve. */
+  /**
+   * Halt everything where it is: running tweens, `hop`/`squish`/`blink`
+   * sequences and the current idle gesture. Their promises resolve; the idle
+   * loop (if on) carries on after its pause.
+   */
   stop(): void;
   /** Start or stop the idle loop (blink, breathe, glance). */
   setIdle(on: boolean): void;
@@ -189,7 +193,14 @@ export function mountPlushie(container: HTMLElement, three: ThreeModule, options
   const camera = new three.PerspectiveCamera();
   const DISTANCE = 1600;
 
-  let plushie = createPlushie(three, {...rest, renderer} as PlushieOptions & Partial<PlushiePose>);
+  let plushie: Plushie;
+  try {
+    plushie = createPlushie(three, {...rest, renderer} as PlushieOptions & Partial<PlushiePose>);
+  } catch (error) {
+    releaseRenderer(three, shared, user);
+    canvas.remove();
+    throw error;
+  }
   world.add(plushie.object);
 
   let width = 1;
@@ -236,13 +247,23 @@ export function mountPlushie(container: HTMLElement, three: ThreeModule, options
   let stale = false;
   // When a tween ends inside a frame, tweens started from its promise begin
   // where it ended, not a frame later — chained steps don't drift.
+  // Only within about a frame (twice the last frame gap, 50..500 ms): after
+  // rAF was paused (a background tab) the next steps start now instead of
+  // snapping through.
   let chainFrom = 0;
+  let chainLimit = 50;
   let chaining = false;
+  let lastTick = 0;
+  let frameGap = 0;
+  // Bumped by stop(): performances check it after each step and end there.
+  let generation = 0;
   const invalidate = () => {
     if (!frame && !disposed) frame = requestAnimationFrame(tick);
   };
   const tick = (now: number) => {
     frame = 0;
+    // The gap before this frame; a frame that ends a pause doesn't count.
+    const gap = lastTick ? now - lastTick : 0;
     const next: Partial<PlushiePose> = {};
     const finished: Tween[] = [];
     for (const [key, t] of tweens) {
@@ -258,11 +279,14 @@ export function mountPlushie(container: HTMLElement, three: ThreeModule, options
     else stale = true;
     if (finished.length) {
       chainFrom = Math.max(...finished.map(t => t.start + t.seconds * 1000));
+      chainLimit = Math.min(500, Math.max(50, 2 * frameGap));
       chaining = true;
       // Promise continuations run before this timer: only they chain.
       setTimeout(() => (chaining = false));
       for (const t of finished) t.done();
     }
+    frameGap = tweens.size ? gap : 0;
+    lastTick = tweens.size ? now : 0;
     if (tweens.size) invalidate();
   };
 
@@ -276,7 +300,8 @@ export function mountPlushie(container: HTMLElement, three: ThreeModule, options
 
   const to: PlushieViewer['to'] = (pose, seconds = 0.4, ease = easeInOut) => {
     if (disposed) return Promise.resolve();
-    const start = chaining ? chainFrom : performance.now();
+    const now = performance.now();
+    const start = chaining && now - chainFrom <= chainLimit ? chainFrom : now;
     const keys = (Object.keys(pose) as Numeric[]).filter(k => NUMERIC.includes(k) && Number.isFinite(pose[k]));
     const done = Promise.all(
       keys.map(
@@ -298,6 +323,14 @@ export function mountPlushie(container: HTMLElement, three: ThreeModule, options
     return done;
   };
   const wait = (seconds: number) => new Promise(r => setTimeout(r, seconds * 1000));
+  /** Run the steps of a performance in order; stop() or dispose() ends it after the current step. */
+  const perform = async (steps: (() => Promise<unknown>)[]) => {
+    const g = generation;
+    for (const step of steps) {
+      if (disposed || generation !== g) return;
+      await step();
+    }
+  };
 
   let idling = false;
   let idleRun = 0;
@@ -305,16 +338,18 @@ export function mountPlushie(container: HTMLElement, three: ThreeModule, options
     const glances: [number, number][] = [[-0.8, 0], [0.7, -0.3], [0, 0.2], [0.4, 0.5], [0, 0]];
     const alive = () => !disposed && idleRun === run;
     for (let i = 0; alive(); i++) {
+      // stop() ends the current gesture; the loop picks up after the pause.
+      const g = generation;
+      const going = () => alive() && generation === g;
       await viewer.blink();
-      if (!alive()) break;
-      await to({squash: 0.08, float: 1.12}, 1.1);
-      if (!alive()) break;
-      await to({squash: 0, float: 1}, 1.1);
+      if (going()) await to({squash: 0.08, float: 1.12}, 1.1);
+      if (going()) await to({squash: 0, float: 1}, 1.1);
       // Don't fight the pointer while someone is moving it.
-      if (alive() && performance.now() - pointerAt > 2000) {
+      if (going() && performance.now() - pointerAt > 2000) {
         const [x, y] = glances[i % glances.length];
         await viewer.look(x, y, 0.4);
       }
+      if (!alive()) break;
       await wait(0.6 + ((i * 7) % 5) * 0.25);
     }
   };
@@ -348,25 +383,30 @@ export function mountPlushie(container: HTMLElement, three: ThreeModule, options
     },
     to,
     look: (x, y = 0, seconds = 0.35) => to({lookX: x, lookY: y}, seconds),
-    async blink(seconds = 0.22) {
-      await to({blink: 1}, seconds * 0.45, easeIn);
-      await to({blink: 0}, seconds * 0.55, easeOut);
-    },
-    async hop(jump, seconds = 1.1) {
+    blink: (seconds = 0.22) =>
+      perform([() => to({blink: 1}, seconds * 0.45, easeIn), () => to({blink: 0}, seconds * 0.55, easeOut)]),
+    hop(jump, seconds = 1.1) {
       const height = jump ?? Math.min(90, plushie.pose.height * 0.2);
-      await to({squash: 0.45}, seconds * 0.2, easeOut);
-      void to({squash: -0.35}, seconds * 0.15, easeOut);
-      await to({hop: height}, seconds * 0.3, easeOut);
-      void to({squash: 0}, seconds * 0.2);
-      await to({hop: 0}, seconds * 0.25, easeIn);
-      await to({squash: 0.4}, seconds * 0.08, easeOut);
-      await to({squash: 0}, seconds * 0.22, easeOut);
+      return perform([
+        () => to({squash: 0.45}, seconds * 0.2, easeOut),
+        () => {
+          void to({squash: -0.35}, seconds * 0.15, easeOut);
+          return to({hop: height}, seconds * 0.3, easeOut);
+        },
+        () => {
+          void to({squash: 0}, seconds * 0.2);
+          return to({hop: 0}, seconds * 0.25, easeIn);
+        },
+        () => to({squash: 0.4}, seconds * 0.08, easeOut),
+        () => to({squash: 0}, seconds * 0.22, easeOut),
+      ]);
     },
-    async squish(amount = 0.6, seconds = 1) {
-      await to({squash: amount, float: 1.25}, seconds * 0.35, easeOut);
-      await to({squash: -amount * 0.3, float: 0.9}, seconds * 0.25, easeInOut);
-      await to({squash: 0, float: 1}, seconds * 0.4, easeOut);
-    },
+    squish: (amount = 0.6, seconds = 1) =>
+      perform([
+        () => to({squash: amount, float: 1.25}, seconds * 0.35, easeOut),
+        () => to({squash: -amount * 0.3, float: 0.9}, seconds * 0.25, easeInOut),
+        () => to({squash: 0, float: 1}, seconds * 0.4, easeOut),
+      ]),
     restyle(change) {
       if (disposed) return;
       const {fur, ...rest} = change as ViewerLook & Partial<PlushiePose> & {renderer?: unknown};
@@ -380,6 +420,8 @@ export function mountPlushie(container: HTMLElement, three: ThreeModule, options
         else look[key] = value;
       }
       for (const key of Object.keys(posed)) settle(key as Numeric);
+      // The fur is set below (given, or the new fabric's): a running fur tween would overwrite it.
+      if (fur !== undefined || 'fabric' in rest) settle('fur');
       const {fur: _fur, ...pose} = plushie.pose;
       plushie.dispose();
       plushie = createPlushie(three, {...look, ...pose, ...posed, ...(fur !== undefined && {fur}), renderer} as PlushieOptions &
@@ -388,6 +430,7 @@ export function mountPlushie(container: HTMLElement, three: ThreeModule, options
       invalidate();
     },
     stop() {
+      generation++;
       settle();
     },
     setIdle(on) {

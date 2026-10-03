@@ -60,7 +60,9 @@ small build and pass your copy in.
 ```
 
 The canvas is transparent and fills its container. The viewer only renders
-while something changes, and pauses while it is scrolled off-screen. Every viewer on the page draws through one shared,
+while something changes, and stops painting while it is scrolled off-screen
+(tweens keep running, so their promises still resolve; it repaints when it
+scrolls back in). Every viewer on the page draws through one shared,
 hidden WebGL context, so you can mount dozens without hitting the browser's
 limit of about 16 contexts.
 
@@ -69,7 +71,7 @@ limit of about 16 contexts.
 | `view.set(pose)` | set pose fields right away |
 | `view.to(pose, seconds, ease)` | tween numeric pose fields; resolves when done |
 | `view.look(x, y)` · `view.blink()` · `view.hop(height)` · `view.squish(amount)` | little performances, all promises; `hop()` defaults to a height that fits the container: min(90, 20% of its height) px |
-| `view.stop()` | stop every running tween where it is; their promises resolve |
+| `view.stop()` | halt everything where it is: running tweens, `hop`/`squish`/`blink` sequences and the idle loop's current gesture. All their promises resolve; the idle loop, if on, carries on after its next pause (use `setIdle(false)` to end it) |
 | `view.restyle(options)` | change the look in place, keeping the pose. `options` is **merged** into the current look (pass `undefined` to reset a key); only the fur length resets, to the new fabric's, unless you give `fur` |
 | `view.options` | the current look: the mount options merged with every `restyle` |
 | `view.setIdle(on)` · `view.setFollowPointer(on)` | toggle the idle loop / pointer following |
@@ -135,7 +137,8 @@ points, e.g. for icons).
 Colours accept any CSS colour: hex, names, `rgb()`/`hsl()` in comma or space
 syntax, and `oklch()`/`lab()` and friends (resolved through the browser). An
 unknown colour warns once in the console and falls back to the default; any
-other invalid option does the same.
+other invalid option does the same (booleans included: `shadow: 'false'`
+warns and keeps the default).
 
 ## Pose (per frame)
 

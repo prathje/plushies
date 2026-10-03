@@ -67,9 +67,7 @@ test('dispose() and stop() settle pending tweens', async () => {
     const afterDispose = a.to({turn: 30}, 1);
     return [await race(hop), await race(squish), await race(afterDispose)];
   });
-  // squish() is three steps: stop() settles the running one, the next ones start fresh.
-  expect(result[0]).toBe('settled');
-  expect(result[2]).toBe('settled');
+  expect(result).toEqual(['settled', 'settled', 'settled']);
   await page.close();
 }, 90_000);
 
@@ -154,3 +152,110 @@ test('chained steps keep their total duration', async () => {
   expect(ms).toBeLessThan(1000 + 250);
   await page.close();
 }, 90_000);
+
+test('stop() halts a performance and the idle gesture where they are', async () => {
+  const {page} = await open();
+  const result = await page.evaluate(async () => {
+    const w = window as any;
+    const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
+    const a = w.mountPlushie(document.querySelector('#a'), w.THREE, {});
+    await a.to({turn: 1}, 0.01);
+    const hop = a.hop(60, 2);
+    await sleep(250);
+    a.stop();
+    const held = {...a.plushie.pose};
+    const settled = await Promise.race([hop.then(() => true), sleep(100).then(() => false)]);
+    await sleep(500);
+    const after = a.plushie.pose;
+    // The idle loop: stop() mid-blink holds the lid there through the pause that follows.
+    const b = w.mountPlushie(document.querySelector('#b'), w.THREE, {idle: true});
+    await new Promise(r => {
+      const poll = () => (b.plushie.pose.blink > 0.2 ? r(null) : requestAnimationFrame(poll));
+      poll();
+    });
+    b.stop();
+    const lid = b.plushie.pose.blink;
+    await sleep(400);
+    return {settled, held, after, lid, lidAfter: b.plushie.pose.blink};
+  });
+  expect(result.settled).toBe(true);
+  expect(result.held.squash).not.toBe(0);
+  for (const key of ['squash', 'hop', 'float']) expect([key, result.after[key]]).toEqual([key, result.held[key]]);
+  expect(result.lid).toBeGreaterThan(0.2);
+  expect(result.lidAfter).toBe(result.lid);
+  await page.close();
+}, 90_000);
+
+test('a step chained after a long stall starts now, not back when the stall began', async () => {
+  const {page} = await open();
+  const ms = await page.evaluate(async () => {
+    const w = window as any;
+    const a = w.mountPlushie(document.querySelector('#a'), w.THREE, {});
+    await a.to({turn: 5}, 0.01);
+    // Block the main thread past the end of the first step, like a paused background tab.
+    const first = a.to({turn: 10}, 0.05);
+    const end = performance.now() + 1000;
+    while (performance.now() < end);
+    await first;
+    const t = performance.now();
+    await a.to({turn: 20}, 0.3);
+    return performance.now() - t;
+  });
+  // Chained from the first step's end, the 300 ms step would already be over on its first frame.
+  expect(ms).toBeGreaterThan(250);
+  await page.close();
+}, 90_000);
+
+test('restyle() with fur or a new fabric settles a running fur tween', async () => {
+  const {page} = await open();
+  const fur = await page.evaluate(async () => {
+    const w = window as any;
+    const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
+    const a = w.mountPlushie(document.querySelector('#a'), w.THREE, {});
+    const b = w.mountPlushie(document.querySelector('#b'), w.THREE, {fabric: 'shaggy'});
+    void a.to({fur: 0.01}, 1);
+    await sleep(100);
+    a.restyle({fur: 0.3});
+    await sleep(300);
+    const given = a.plushie.pose.fur;
+    void a.to({fur: 0.01}, 1);
+    await sleep(100);
+    a.restyle({fabric: 'shaggy'});
+    await sleep(300);
+    return {given, fabric: a.plushie.pose.fur, shaggy: b.plushie.pose.fur};
+  });
+  expect(fur.given).toBe(0.3);
+  expect(fur.fabric).toBe(fur.shaggy);
+  await page.close();
+}, 90_000);
+
+test('translucent, bare-number hsl and `none` colours resolve like their opaque twins', async () => {
+  const {page, logs} = await open();
+  const pairs = await page.evaluate(async src => {
+    const w = window as any;
+    const pixels = eval(src);
+    const centre = async (color: string) => {
+      const v = w.mountPlushie(document.querySelector('#a'), w.THREE, {color, eyes: 'none'});
+      await pixels(v);
+      const c = v.canvas;
+      const [r, g, b] = c.getContext('2d').getImageData(c.width / 2, c.height / 2, 1, 1).data;
+      v.dispose();
+      return [r, g, b];
+    };
+    const out: [string, number[], number[]][] = [];
+    for (const [color, twin] of [
+      ['color(srgb 0.2 0.4 0.6 / 0.5)', '#336699'],
+      ['hsl(120 50 50)', 'hsl(120, 50%, 50%)'],
+      ['rgb(none 102 153)', '#006699'],
+    ]) {
+      out.push([color, await centre(color), await centre(twin)]);
+    }
+    return out;
+  }, PIXELS);
+  // The browser stores the translucent probe pixel premultiplied: off by a step or two at most.
+  for (const [color, rgb, twin] of pairs) {
+    expect([color, rgb.every((v, i) => Math.abs(v - twin[i]) <= 3)]).toEqual([color, true]);
+  }
+  expect(logs.filter(l => /unknown colour/.test(l))).toEqual([]);
+  await page.close();
+}, 120_000);

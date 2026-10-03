@@ -1,5 +1,5 @@
-import './dom-stub';
-import {describe, expect, test} from 'bun:test';
+import {readback} from './dom-stub';
+import {describe, expect, spyOn, test} from 'bun:test';
 import * as THREE from 'three';
 import {
   DEFAULT_OPTIONS,
@@ -137,6 +137,67 @@ describe('pose', () => {
     const css = flat(uColor('rgb(51, 102, 153)'));
     flat(uColor('#336699')).forEach((v, i) => expect(css[i]).toBeCloseTo(v, 4));
     expect(uColor('#336699')).not.toEqual(uColor('#996633'));
+  });
+
+  const fur = (color: string | [number, number, number]) => {
+    const plush = createPlushie(THREE, {color});
+    const flat = JSON.stringify(snapshot(plush.object).map(n => (n as {uniforms: Record<string, unknown>}).uniforms));
+    return flat.match(/-?\d+\.?\d*(e-?\d+)?/g)!.map(Number);
+  };
+  const near = (a: number[], b: number[]) => {
+    expect(a.length).toBe(b.length);
+    a.forEach((v, i) => expect(v).toBeCloseTo(b[i], 4));
+  };
+
+  test('colours: hsl() space syntax reads bare s/l as percent', () => {
+    const green = fur([0.25, 0.75, 0.25]);
+    near(fur('hsl(120 50 50)'), green);
+    near(fur('hsl(120 50% 50%)'), green);
+    near(fur('hsl(120, 50%, 50%)'), green);
+    near(fur('hsla(120deg 50 50 / 0.5)'), green);
+  });
+
+  test('colours: what the hand parser rejects goes to the browser', () => {
+    const warn = spyOn(console, 'warn').mockImplementation(() => {});
+    const css = (globalThis as Record<string, unknown>).CSS;
+    (globalThis as Record<string, unknown>).CSS = {supports: () => true};
+    try {
+      // No browser here: the stub canvas reads back this pixel for every colour it is asked to resolve.
+      readback.pixel = [0, 255, 0, 255];
+      const lime = fur([0, 1, 0]);
+      near(fur('rgb(none 255 0)'), lime);
+      // Legacy comma syntax needs % for s and l.
+      near(fur('hsl(0, 100, 50)'), lime);
+      near(fur('rgb(255, 0%, 0)'), lime);
+      expect(warn).not.toHaveBeenCalled();
+    } finally {
+      readback.pixel = null;
+      (globalThis as Record<string, unknown>).CSS = css;
+      warn.mockRestore();
+    }
+  });
+
+  test('colours: translucent browser colours keep their RGB (readback is not premultiplied)', () => {
+    const css = (globalThis as Record<string, unknown>).CSS;
+    (globalThis as Record<string, unknown>).CSS = {supports: () => true};
+    try {
+      readback.pixel = [0x33, 0x66, 0x99, 128];
+      near(fur('color(srgb 0.2 0.4 0.6 / 0.5)'), fur('#336699'));
+    } finally {
+      readback.pixel = null;
+      (globalThis as Record<string, unknown>).CSS = css;
+    }
+  });
+
+  test('boolean options are checked', () => {
+    const warn = spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const plush = createPlushie(THREE, {shadow: 'false' as unknown as boolean, cheeks: 1 as unknown as boolean});
+      expect(meshCount(plush.object)).toBe(meshCount(createPlushie(THREE, {}).object));
+      expect(warn.mock.calls.map(c => String(c[0])).filter(m => /must be true or false/.test(m)).length).toBe(2);
+    } finally {
+      warn.mockRestore();
+    }
   });
 
   test('fits into width × height', () => {
