@@ -5,7 +5,7 @@
  * while it works, and the sparkle's twinkling glints beside the plushie.
  */
 import type {CursorView, Design} from '../design';
-import {CHECK_ICON, el, injectStyle, morph, roundedPath, svg, swapText} from '../dom';
+import {CHECK_ICON, clearText, el, injectStyle, morph, roundedPath, svg, swapText, type StyleRoot} from '../dom';
 
 /** The editor's pointer: an arrowhead with no tail, back corners rounded to match the pill. */
 const ARROW = roundedPath([
@@ -32,35 +32,36 @@ const CSS = `
 .pc-live .pc-box { box-sizing: border-box; overflow: hidden; background: var(--pc); color: var(--pc-ink);
   border-radius: 10px; padding: 2px 7px; font: 600 11px/16px var(--pc-font); white-space: nowrap;
   box-shadow: 0 1px 3px rgba(0,0,0,.25);
-  transition: width .38s cubic-bezier(.3, 1.15, .5, 1), height .38s cubic-bezier(.3, 1.15, .5, 1), border-radius .25s, padding .25s; }
+  transition: width .38s cubic-bezier(.3, 1.04, .5, 1), height .38s cubic-bezier(.3, 1.04, .5, 1), border-radius .25s, padding .25s; }
 .pc-live .pc-box.is-open { border-radius: 2px 12px 12px 12px; padding: 5px 9px 6px; }
 .pc-flip-x .pc-live .pc-box.is-open { border-radius: 12px 2px 12px 12px; }
 .pc-flip-y .pc-live .pc-box.is-open { border-radius: 12px 12px 12px 2px; }
 .pc-flip-x.pc-flip-y .pc-live .pc-box.is-open { border-radius: 12px 12px 2px 12px; }
-.pc-live .pc-inner { width: max-content; max-width: 240px; }
-.pc-live .pc-name { transition: font-size .25s, opacity .25s; }
+.pc-live .pc-inner { width: max-content; max-width: min(240px, 62vw); }
+.pc-live .pc-name { display: flex; white-space: nowrap; transition: font-size .25s, opacity .25s; }
+.pc-live .pc-name > span:first-child { min-width: 0; max-width: 160px; overflow: hidden; text-overflow: ellipsis; }
 .pc-live .is-open .pc-name { font-size: 10px; line-height: 14px; opacity: .8; }
 .pc-live .pc-step { margin-left: 4px; font-variant-numeric: tabular-nums; }
-.pc-live .pc-text { position: relative; display: none; font-size: 13px; line-height: 18px; font-weight: 500; white-space: pre-wrap; overflow-wrap: anywhere; max-width: 240px; }
+.pc-live .pc-text { position: relative; display: none; font-size: 13px; line-height: 18px; font-weight: 500; white-space: pre-wrap; overflow-wrap: anywhere; max-width: min(240px, 62vw); }
 .pc-live .is-open .pc-text { display: block; }
-.pc-live .pc-detail { display: none; font-size: 11px; line-height: 15px; font-weight: 500; opacity: .78; white-space: pre-wrap; max-width: 240px; }
-.pc-live .is-open .pc-detail.has { display: block; }
+.pc-live .pc-detail { display: none; font-size: 11px; line-height: 15px; font-weight: 500; opacity: .78; white-space: pre-wrap; overflow-wrap: anywhere; max-width: min(240px, 62vw); }
+.pc-live .is-open .pc-detail.has { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
 .pc-live .pc-bar { display: none; height: 3px; margin-top: 5px; border-radius: 2px; background: color-mix(in srgb, currentColor 25%, transparent); overflow: hidden; }
 .pc-live .is-open .pc-bar.has { display: block; }
 .pc-live .pc-bar > i { display: block; height: 100%; width: calc(var(--p, 0) * 100%); border-radius: inherit; background: currentColor; transition: width .45s cubic-bezier(.3, .8, .3, 1); }
-.pc-live .pc-pop { animation: pc-live-pop .55s cubic-bezier(.34, 1.56, .64, 1); }
-@keyframes pc-live-pop { 35% { transform: scale(1.08) } }
+.pc-live .pc-pop { animation: pc-live-pop .5s cubic-bezier(.3, .7, .4, 1); }
+@keyframes pc-live-pop { 35% { transform: scale(1.05) } }
 `;
 
-export function liveDesign(): Design {
-  injectStyle('live', CSS);
+export function liveDesign(styles: StyleRoot): Design {
+  injectStyle('live', CSS, styles);
   const root = el('div', 'pc-live');
   const part = el('div', 'pc-part', root);
   svg(`<svg width="22" height="22" viewBox="0 0 22 22"><path d="${ARROW}" fill="var(--pc)" stroke="#fff" stroke-width="1.5" stroke-linejoin="round"/></svg>`, 'pc-arrive', part);
   const body = el('div', 'pc-body', root);
   const plushHost = el('div', 'pc-plush', body);
   // The editor sparkle's two glints, twinkling out of step beside the plushie while it works.
-  for (const [x, y, s] of [[16, -24, 8], [20, 6, 6]]) {
+  for (const [x, y, s] of [[17, -27, 11], [21, 6, 8]]) {
     const g = svg(`<svg width="${s}" height="${s}" viewBox="0 0 12 12"><path d="${SPARKLE}"/></svg>`, 'pc-glint', body);
     g.style.left = `${x}px`;
     g.style.top = `${y}px`;
@@ -84,9 +85,10 @@ export function liveDesign(): Design {
     plushHost,
     // Where the sparkle was: just above and right of the pointer's back.
     anchor: {x: 32, y: -15},
-    motion: {tip: 16, body: 13, damping: 0.68, bob: 1.5, hop: 14},
+    motion: {tip: 16, body: 13, damping: 0.68, bob: 1.5, hop: 14, leash: 24},
     vertical: 1,
-    room: () => ({x: 10 + box.offsetWidth + 6, y: 10 + box.offsetHeight + 6}),
+    // The plushie floats above the tip, the label hangs below it.
+    room: bare => ({x: 10 + box.offsetWidth + 6, y: 10 + box.offsetHeight + 6, up: bare ? 4 : 15 + SIZE / 2 + 2}),
     render(view: CursorView) {
       const s = view.status;
       const message = view.said ?? view.done ?? s?.text ?? null;
@@ -99,7 +101,7 @@ export function liveDesign(): Design {
         if (message !== null) {
           const line = swapText(text, view.done ?? message);
           if (view.done && !line.querySelector('.pc-check')) line.insertAdjacentHTML('afterbegin', CHECK_ICON);
-        }
+        } else clearText(text);
         const d = !view.said && !view.done ? s?.detail ?? '' : '';
         detail.textContent = d;
         detail.classList.toggle('has', !!d);

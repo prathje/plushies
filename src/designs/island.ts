@@ -5,7 +5,7 @@
  * and shrinks back to a pill when it's done.
  */
 import type {CursorView, Design} from '../design';
-import {CHECK_ICON, el, injectStyle, morph, svg, swapText} from '../dom';
+import {CHECK_ICON, clearText, el, injectStyle, morph, svg, swapText, type StyleRoot} from '../dom';
 
 const SIZE = 40;
 const SEAT = 34;
@@ -21,7 +21,7 @@ const CSS = `
   background: rgba(22, 22, 27, .86); -webkit-backdrop-filter: blur(14px) saturate(1.6); backdrop-filter: blur(14px) saturate(1.6);
   border-radius: 24px; padding: 5px 13px 5px 5px;
   box-shadow: 0 10px 28px rgba(0,0,0,.28), 0 1px 3px rgba(0,0,0,.2), inset 0 0 0 1px rgba(255,255,255,.09);
-  transition: width .46s cubic-bezier(.32, 1.25, .45, 1), height .46s cubic-bezier(.32, 1.25, .45, 1), border-radius .3s, padding .3s; }
+  transition: width .46s cubic-bezier(.32, 1.04, .45, 1), height .46s cubic-bezier(.32, 1.04, .45, 1), border-radius .3s, padding .3s; }
 .pc-island .pc-box.is-open { border-radius: 20px; padding: 7px 14px 8px 7px; }
 .pc-bare .pc-island .pc-seat { display: none; }
 .pc-bare .pc-island .pc-box { padding-left: 12px; }
@@ -31,8 +31,8 @@ const CSS = `
 .pc-island .is-open .pc-inner { align-items: flex-start; }
 .pc-island .pc-seat { position: relative; flex: none; width: ${SEAT}px; height: ${SEAT}px; border-radius: 50%;
   background: radial-gradient(circle at 50% 28%, color-mix(in srgb, var(--pc) 38%, #3a3a44) 0%, color-mix(in srgb, var(--pc) 16%, #17171c) 100%); }
-.pc-island .pc-plush { left: ${(SEAT - SIZE) / 2}px; top: ${(SEAT - SIZE) / 2 - 1}px; width: ${SIZE}px; height: ${SIZE}px; }
-.pc-island .pc-ring { position: absolute; left: -5px; top: -5px; width: ${SEAT + 10}px; height: ${SEAT + 10}px; overflow: visible; rotate: -90deg; pointer-events: none; }
+.pc-island .pc-plush { z-index: 0; left: ${(SEAT - SIZE) / 2}px; top: ${(SEAT - SIZE) / 2 - 1}px; width: ${SIZE}px; height: ${SIZE}px; }
+.pc-island .pc-ring { position: absolute; left: -5px; top: -5px; width: ${SEAT + 10}px; height: ${SEAT + 10}px; overflow: visible; rotate: -90deg; pointer-events: none; z-index: 1; }
 .pc-island .pc-ring circle { fill: none; stroke-width: 2.5; }
 .pc-island .pc-ring .pc-track { stroke: rgba(255,255,255,.12); opacity: 0; transition: opacity .3s; }
 .pc-island .pc-ring .pc-arc { stroke: var(--pc); stroke-linecap: round; stroke-dasharray: ${RING.toFixed(2)}; stroke-dashoffset: ${RING.toFixed(2)};
@@ -41,9 +41,9 @@ const CSS = `
 .pc-island .is-spin .pc-arc { stroke-dashoffset: ${(RING * 0.74).toFixed(2)}; animation: pc-spin 1s linear infinite; }
 .pc-island .is-finished .pc-arc { opacity: 1; stroke: #34c759; stroke-dashoffset: 0; }
 @keyframes pc-spin { to { transform: rotate(360deg) } }
-.pc-island .pc-col { display: flex; flex-direction: column; justify-content: center; min-height: ${SEAT}px; max-width: 230px; }
+.pc-island .pc-col { display: flex; flex-direction: column; justify-content: center; min-height: ${SEAT}px; max-width: min(230px, 60vw); }
 .pc-island .pc-head { display: flex; align-items: center; gap: 7px; }
-.pc-island .pc-name { font-weight: 650; font-size: 13px; letter-spacing: -.005em; white-space: nowrap; }
+.pc-island .pc-name { font-weight: 650; font-size: 13px; letter-spacing: -.005em; white-space: nowrap; min-width: 0; max-width: 150px; overflow: hidden; text-overflow: ellipsis; }
 .pc-island .pc-chip { display: none; padding: 1px 6px; border-radius: 6px; font: 600 10.5px/15px var(--pc-font); font-variant-numeric: tabular-nums;
   background: rgba(255,255,255,.12); color: rgba(255,255,255,.85); }
 .pc-island .pc-chip.has { display: inline-block; }
@@ -51,16 +51,23 @@ const CSS = `
 .pc-island .pc-chip .pc-check { margin: 0; vertical-align: -.17em; }
 .pc-island .pc-line { position: relative; display: none; color: rgba(255,255,255,.74); white-space: pre-wrap; overflow-wrap: anywhere; margin-top: 1px; }
 .pc-island .is-open .pc-line { display: block; }
-.pc-island .is-busy .pc-line .pc-t:not(.pc-t-out) { background: linear-gradient(90deg, rgba(255,255,255,.5) 0%, rgba(255,255,255,.5) 35%, #fff 50%, rgba(255,255,255,.5) 65%, rgba(255,255,255,.5) 100%);
-  background-size: 250% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; animation: pc-t-in .32s cubic-bezier(.2, .8, .3, 1) both, pc-shimmer 1.8s linear infinite; }
-@keyframes pc-shimmer { from { background-position: 100% 0 } to { background-position: -150% 0 } }
+.pc-island .is-busy .pc-line .pc-t:not(.pc-t-out) { color: #fff;
+  -webkit-mask-image: linear-gradient(90deg, rgba(0,0,0,.55) 0%, rgba(0,0,0,.55) 35%, #000 50%, rgba(0,0,0,.55) 65%, rgba(0,0,0,.55) 100%);
+  mask-image: linear-gradient(90deg, rgba(0,0,0,.55) 0%, rgba(0,0,0,.55) 35%, #000 50%, rgba(0,0,0,.55) 65%, rgba(0,0,0,.55) 100%);
+  -webkit-mask-size: 250% 100%; mask-size: 250% 100%;
+  animation: pc-t-in .32s cubic-bezier(.2, .8, .3, 1) both, pc-shimmer 1.8s linear infinite; }
+@keyframes pc-shimmer { from { -webkit-mask-position: 100% 0; mask-position: 100% 0 } to { -webkit-mask-position: -150% 0; mask-position: -150% 0 } }
 .pc-island .pc-said { color: #fff; }
-.pc-island .pc-detail { display: none; color: rgba(255,255,255,.48); font-size: 11px; line-height: 15px; margin-top: 2px; white-space: pre-wrap; }
-.pc-island .is-open .pc-detail.has { display: block; }
+.pc-island .pc-detail { display: none; color: rgba(255,255,255,.48); font-size: 11px; line-height: 15px; margin-top: 2px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.pc-island .is-open .pc-detail.has { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+/* Without the seat (no plushie) the progress shows as a bar. */
+.pc-island .pc-pbar { display: none; height: 3px; margin-top: 6px; border-radius: 2px; background: rgba(255,255,255,.14); overflow: hidden; }
+.pc-bare .pc-island .is-open .pc-pbar.has { display: block; }
+.pc-island .pc-pbar > i { display: block; height: 100%; width: calc(var(--p, 0) * 100%); border-radius: inherit; background: var(--pc); transition: width .45s cubic-bezier(.3, .8, .3, 1); }
 `;
 
-export function islandDesign(): Design {
-  injectStyle('island', CSS);
+export function islandDesign(styles: StyleRoot): Design {
+  injectStyle('island', CSS, styles);
   const root = el('div', 'pc-island');
   const part = el('div', 'pc-part', root);
   svg(
@@ -86,6 +93,8 @@ export function islandDesign(): Design {
   const chip = el('span', 'pc-chip', head);
   const line = el('div', 'pc-line', col);
   const detail = el('div', 'pc-detail', col);
+  const pbar = el('div', 'pc-pbar', col);
+  const pfill = el('i', '', pbar);
 
   return {
     kind: 'island',
@@ -93,9 +102,9 @@ export function islandDesign(): Design {
     body,
     plushHost,
     anchor: {x: 13, y: 21},
-    motion: {tip: 15, body: 17, damping: 0.72, bob: 0, hop: 0},
+    motion: {tip: 15, body: 17, damping: 0.72, bob: 0, hop: 0, leash: 22},
     vertical: 1,
-    room: () => ({x: 13 + box.offsetWidth + 8, y: 21 + box.offsetHeight + 8}),
+    room: () => ({x: 13 + box.offsetWidth + 8, y: 21 + box.offsetHeight + 8, up: 4}),
     render(view: CursorView) {
       const s = view.status;
       const note = view.said ?? view.done;
@@ -117,10 +126,13 @@ export function islandDesign(): Design {
         if (view.done) chip.innerHTML = CHECK_ICON;
         else chip.textContent = st ? `${st[0]}/${st[1]}` : '';
         if (message !== null) swapText(line, view.said ? `“${message}”` : message);
+        else clearText(line);
         line.classList.toggle('pc-said', !!view.said);
         const d = !note ? s?.detail ?? '' : '';
         detail.textContent = d;
         detail.classList.toggle('has', !!d);
+        pbar.classList.toggle('has', p != null);
+        if (p != null) pfill.style.setProperty('--p', String(Math.max(0, Math.min(1, p))));
       });
     },
     dispose: () => root.remove(),

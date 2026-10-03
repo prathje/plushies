@@ -5,7 +5,7 @@
  * letter, with thinking dots while it works and a stitched progress seam.
  */
 import type {CursorView, Design} from '../design';
-import {CHECK_ICON, el, injectStyle, morph, roundedPath, svg, typeText} from '../dom';
+import {CHECK_ICON, clearText, el, injectStyle, morph, roundedPath, svg, typeText, type StyleRoot} from '../dom';
 
 const SIZE = 66;
 const ARROW = roundedPath([
@@ -25,6 +25,7 @@ const CSS = `
 
 .pc-buddy .pc-tag { position: absolute; left: 6px; top: 20px; transform-origin: 3px 2px; rotate: var(--swing, -7deg);
   background: #fffaf1; color: var(--pc-deep); font: 600 12px/1 var(--pc-font-round); letter-spacing: .01em; white-space: nowrap;
+  max-width: 140px; overflow: hidden; text-overflow: ellipsis;
   padding: 5px 9px 5px 13px; border-radius: 3px 6px 6px 3px;
   outline: 1.5px dashed color-mix(in srgb, var(--pc) 65%, white); outline-offset: -3.5px;
   box-shadow: 0 1px 0 rgba(0,0,0,.06), 0 3px 8px rgba(40,25,10,.18); }
@@ -35,21 +36,22 @@ const CSS = `
 .pc-flip-x .pc-buddy .pc-tag::before { left: auto; right: 4px; }
 
 .pc-buddy .pc-bubble { position: absolute; left: 28px; bottom: 6px; transform-origin: 0 100%;
-  transition: opacity .2s, scale .45s cubic-bezier(.34, 1.56, .64, 1); scale: .4; opacity: 0; }
+  transition: opacity .14s, scale .36s cubic-bezier(.3, 1.05, .5, 1); scale: .7; opacity: 0; }
 .pc-buddy .pc-bubble.is-open { scale: 1; opacity: 1; }
 .pc-flip-x .pc-buddy .pc-bubble { left: auto; right: 28px; transform-origin: 100% 100%; }
 .pc-buddy .pc-box { box-sizing: border-box; overflow: hidden; background: #fff; color: #2b221c; border-radius: 16px;
   border: 2px solid color-mix(in srgb, var(--pc) 55%, white);
   padding: 7px 12px 8px; font: 600 13px/18px var(--pc-font-round);
   box-shadow: 0 8px 20px rgba(40,25,10,.16), 0 1px 2px rgba(40,25,10,.12);
-  transition: width .42s cubic-bezier(.3, 1.2, .5, 1), height .42s cubic-bezier(.3, 1.2, .5, 1); }
+  transition: width .42s cubic-bezier(.3, 1.04, .5, 1), height .42s cubic-bezier(.3, 1.04, .5, 1); }
 .pc-buddy .pc-tail { position: absolute; left: -6px; bottom: 10px; width: 12px; height: 12px; background: #fff; rotate: 45deg;
   border-left: 2px solid color-mix(in srgb, var(--pc) 55%, white); border-bottom: 2px solid color-mix(in srgb, var(--pc) 55%, white); border-radius: 0 0 0 3px; }
 .pc-flip-x .pc-buddy .pc-tail { left: auto; right: -6px; rotate: -135deg; }
-.pc-buddy .pc-inner { width: max-content; max-width: 230px; }
+.pc-buddy .pc-inner { width: max-content; max-width: min(230px, 60vw); }
 .pc-buddy .pc-text { position: relative; white-space: pre-wrap; overflow-wrap: anywhere; }
 .pc-buddy .pc-text:empty { display: none; }
-.pc-buddy .pc-detail { font: 500 11.5px/16px var(--pc-font-round); color: #8a7a6c; }
+.pc-buddy .pc-detail { font: 500 11.5px/16px var(--pc-font-round); color: #8a7a6c; overflow-wrap: anywhere;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
 .pc-buddy .pc-detail:empty { display: none; }
 .pc-buddy .pc-meta { display: none; align-items: center; gap: 8px; margin-top: 6px; }
 .pc-buddy .pc-meta.has { display: flex; }
@@ -65,8 +67,8 @@ const CSS = `
 .pc-buddy .pc-done { color: #2f9e57; }
 `;
 
-export function buddyDesign(): Design {
-  injectStyle('buddy', CSS);
+export function buddyDesign(styles: StyleRoot): Design {
+  injectStyle('buddy', CSS, styles);
   const root = el('div', 'pc-buddy');
   const string = svg('<svg class="pc-string"><path/></svg>', 'pc-string', root);
   const path = string.querySelector('path')!;
@@ -93,19 +95,31 @@ export function buddyDesign(): Design {
   const dots = el('span', 'pc-dots');
   dots.innerHTML = '<i></i><i></i><i></i>';
 
+  let closing = 0;
   return {
     kind: 'buddy',
     root,
     body,
     plushHost,
     anchor: {x: 40, y: -58},
-    motion: {tip: 11, body: 6, damping: 0.38, bob: 3.5, hop: 20},
+    motion: {tip: 11, body: 6, damping: 0.6, bob: 3.5, hop: 20, leash: 30},
     vertical: -1,
-    room() {
+    // Without the balloon there is nothing to tie the string to: the tag and
+    // bubble sit right by the pointer and follow it closely.
+    bare: {anchor: {x: 22, y: -6}, motion: {body: 14, damping: 0.8, bob: 0, leash: 12}},
+    room(bare) {
       const open = bubble.classList.contains('is-open');
+      if (bare) {
+        return {
+          x: 22 + Math.max(6 + tag.offsetWidth, open ? 28 + box.offsetWidth : 0) + 10,
+          y: 6 + (open ? 6 + box.offsetHeight : 0) + 8,
+          up: 14 + tag.offsetHeight + 6,
+        };
+      }
       return {
         x: 40 + Math.max(SIZE / 2 + tag.offsetWidth * 0.4, open ? 28 + box.offsetWidth : 0) + 10,
         y: 58 + Math.max(SIZE / 2, open ? box.offsetHeight + 6 : 0) + 8,
+        up: 4,
       };
     },
     render(view: CursorView) {
@@ -115,7 +129,12 @@ export function buddyDesign(): Design {
       const message = note ?? s?.text ?? null;
       const busy = !note && !!s && s.busy !== false;
       bubble.classList.toggle('is-open', message !== null);
-      if (message === null) return;
+      clearTimeout(closing);
+      if (message === null) {
+        // Empty it once it has faded, so reopening starts fresh.
+        closing = window.setTimeout(() => clearText(text), 200);
+        return;
+      }
       morph(box, () => {
         if (message) typeText(text, message);
         else text.textContent = '';

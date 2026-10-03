@@ -35,6 +35,18 @@ export interface Motion {
   bob: number;
   /** How high `done` jumps (px); 0 squashes in place. */
   hop: number;
+  /** The floating part never trails further than this from its rest spot (px), however fast the pointer flies. */
+  leash: number;
+}
+
+/** The room a design needs around the tip (px). */
+export interface Room {
+  /** Beside the tip, on the side the content hangs. */
+  x: number;
+  /** In the design's vertical direction (below for `vertical: 1`). */
+  y: number;
+  /** The other way: what sticks out opposite (a plushie floating above a label that hangs below). */
+  up: number;
 }
 
 export interface Design {
@@ -50,8 +62,10 @@ export interface Design {
   readonly motion: Motion;
   /** Which way the content hangs off the tip: 1 below it, −1 above. */
   readonly vertical: 1 | -1;
-  /** The room the content needs right of the tip and in its vertical direction (px). */
-  room(): {x: number; y: number};
+  /** Without a plushie: a different rest spot and motion for the floating part. */
+  readonly bare?: {anchor: {x: number; y: number}; motion?: Partial<Motion>};
+  /** The room the content needs around the tip (`bare`: without a plushie). */
+  room(bare: boolean): Room;
   render(view: CursorView): void;
   /** Every frame: the body's offset from the tip and its velocity (px/s). */
   frame?(body: {x: number; y: number; vx: number; vy: number}, flip: {x: boolean; y: boolean}): void;
