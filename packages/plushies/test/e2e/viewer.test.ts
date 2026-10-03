@@ -4,31 +4,23 @@ import {chromium, type Browser, type Page} from 'playwright';
 import lab from './fixtures/viewer-lab.html';
 
 let server: ReturnType<typeof Bun.serve>;
-let browser: Browser;
-const launch = () => chromium.launch({args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader']});
-beforeAll(async () => {
+beforeAll(() => {
   server = Bun.serve({port: 0, routes: {'/': lab}});
-  browser = await launch();
 });
-// A failed test never reaches its page.close(); a page left animating slows every later test.
-const pages: Page[] = [];
+// One browser per test: on a small CI runner, SwiftShader Chromium crashed a few
+// WebGL-heavy tests into a shared browser, failing whichever test came next.
+let browser: Browser | undefined;
 afterEach(async () => {
-  await Promise.all(pages.splice(0).map(p => p.close().catch(() => {})));
+  await browser?.close().catch(() => {});
+  browser = undefined;
 });
-afterAll(async () => {
-  await browser?.close();
+afterAll(() => {
   server?.stop(true);
 });
 
 async function open(): Promise<{page: Page; logs: string[]}> {
-  // SwiftShader on a small CI runner has taken the whole browser down between
-  // tests; relaunch so one crash doesn't fail every test after it.
-  if (!browser.isConnected()) {
-    console.warn('viewer e2e: the browser disconnected (crashed?); relaunching');
-    browser = await launch();
-  }
+  browser = await chromium.launch({args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader']});
   const page = await browser.newPage();
-  pages.push(page);
   page.setDefaultTimeout(60_000);
   const logs: string[] = [];
   page.on('pageerror', e => logs.push(`error: ${e.message}`));
