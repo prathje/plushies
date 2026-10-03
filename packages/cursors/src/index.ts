@@ -305,7 +305,7 @@ interface Frame {
   bounds: Bounds;
 }
 
-interface Bounds {
+export interface Bounds {
   left: number;
   top: number;
   right: number;
@@ -522,7 +522,7 @@ const DESIGNS: Record<CursorDesign, (styles: StyleRoot) => Design> = {live: live
 const PALETTE = ['#7c3aed', '#e8574f', '#2b7de9', '#2f9e57', '#f5a524', '#d6409f', '#0f9fb5'];
 let paletteNext = 0;
 
-interface Spring {
+export interface Spring {
   x: number;
   y: number;
   vx: number;
@@ -539,6 +539,32 @@ function spring(s: Spring, tx: number, ty: number, omega: number, zeta: number, 
     s.x += s.vx * h;
     s.y += s.vy * h;
   }
+}
+
+/** A cursor's motion state: the point it eases toward, its tip and the floating body (null before its first frame). */
+export interface MotionState {
+  aim: Spring;
+  tip: Spring;
+  goal: {x: number; y: number};
+  body: Spring | null;
+}
+
+/**
+ * NaN never heals by itself: every spring step keeps it, the browser drops
+ * the transforms and the cursor freezes with its plushie on the tip. If any
+ * of the motion has gone non-finite, put it back at rest where the tip was
+ * (else where it was going, else the middle of `bounds`, else the origin)
+ * and say so; finite motion is left alone.
+ */
+export function recoverMotion(m: MotionState, bounds: Bounds | null): boolean {
+  const {aim, tip, goal, body} = m;
+  if (finite(tip.x, tip.y, tip.vx, tip.vy, aim.x, aim.y, aim.vx, aim.vy, goal.x, goal.y) && (!body || finite(body.x, body.y, body.vx, body.vy))) return false;
+  const at = finite(tip.x, tip.y) ? tip : finite(goal.x, goal.y) ? goal : bounds && finite(bounds.left, bounds.right, bounds.top, bounds.bottom) ? {x: (bounds.left + bounds.right) / 2, y: (bounds.top + bounds.bottom) / 2} : {x: 0, y: 0};
+  m.aim = {x: at.x, y: at.y, vx: 0, vy: 0};
+  m.tip = {x: at.x, y: at.y, vx: 0, vy: 0};
+  m.goal = {x: at.x, y: at.y};
+  m.body = null;
+  return true;
 }
 
 /** The longest label morph in the designs (ms), plus a frame or two. */
@@ -826,6 +852,8 @@ class CursorState {
       }
     }
 
+    if (!this.sane(dt, next)) return;
+
     const bob = motion.bob * Math.sin((now / 1000) * Math.PI * 0.9);
     const bx = this.body.x - this.tip.x;
     const by = this.body.y - this.tip.y + bob;
@@ -840,6 +868,18 @@ class CursorState {
     this.pose(box, now);
 
     if (this.move && this.settled()) this.finish('arrived');
+  }
+
+  /** Motion gone non-finite (see recoverMotion): warn once with this frame's inputs, reset, and place everything afresh next frame. */
+  private sane(dt: number, next: Flip) {
+    const motion: MotionState = {aim: this.aim, tip: this.tip, goal: this.goal, body: this.body};
+    const was = JSON.stringify(motion);
+    if (!recoverMotion(motion, this.frame?.bounds ?? null)) return true;
+    warnOnce(`the cursor's motion went non-finite, resetting it: ${was} with ${JSON.stringify({dt, next, frame: this.frame, room: this.room, box: this.targetBox, motion: this.motion, anchor: this.anchor, design: this.design.kind})}`);
+    Object.assign(this, motion);
+    this.written = {tip: '', body: ''};
+    wake(this);
+    return false;
   }
 
   private settled() {

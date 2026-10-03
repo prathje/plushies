@@ -1,7 +1,7 @@
 /** Pure parts: where a cursor hangs, and which ink reads on its colour. */
 import {expect, test} from 'bun:test';
 import {inks, parseColor} from '../src/dom';
-import {place} from '../src/index';
+import {place, recoverMotion, type MotionState} from '../src/index';
 
 const bounds = {left: 0, top: 0, right: 400, bottom: 300};
 const room = {x: 120, y: 40, up: 0};
@@ -55,4 +55,41 @@ test('ink: whichever reads better on the colour', () => {
   expect(inks('#fc0').ink).not.toBe('#fff');
   expect(parseColor('#fc0')).toEqual([255, 204, 0]);
   expect(parseColor('#ffcc0080')).toEqual([255, 204, 0]);
+});
+
+const spring = (x: number, y: number, vx = 0, vy = 0) => ({x, y, vx, vy});
+const motion = (m: MotionState) => m;
+
+test('recoverMotion leaves finite motion alone', () => {
+  const m = motion({aim: spring(10, 20, 1, 2), tip: spring(11, 21, 3, 4), goal: {x: 30, y: 40}, body: spring(50, 60, 5, 6)});
+  const before = JSON.parse(JSON.stringify(m));
+  expect(recoverMotion(m, bounds)).toBe(false);
+  expect(m).toEqual(before);
+  expect(recoverMotion({...m, body: null}, null)).toBe(false);
+});
+
+test('recoverMotion restarts at rest where the tip was, else at the goal, else mid-bounds, else the origin', () => {
+  const tipNaNVelocity = motion({aim: spring(NaN, 20), tip: spring(11, 21, NaN, 4), goal: {x: 30, y: 40}, body: spring(NaN, NaN)});
+  expect(recoverMotion(tipNaNVelocity, bounds)).toBe(true);
+  expect(tipNaNVelocity).toEqual({aim: spring(11, 21), tip: spring(11, 21), goal: {x: 11, y: 21}, body: null});
+
+  const tipGone = motion({aim: spring(1, 2), tip: spring(NaN, Infinity), goal: {x: 30, y: 40}, body: null});
+  expect(recoverMotion(tipGone, bounds)).toBe(true);
+  expect(tipGone.tip).toEqual(spring(30, 40));
+
+  const allGone = motion({aim: spring(NaN, NaN), tip: spring(NaN, NaN), goal: {x: NaN, y: NaN}, body: spring(NaN, NaN)});
+  expect(recoverMotion(allGone, bounds)).toBe(true);
+  expect(allGone.tip).toEqual(spring(200, 150));
+
+  const noBounds = motion({aim: spring(NaN, NaN), tip: spring(NaN, NaN), goal: {x: NaN, y: NaN}, body: null});
+  expect(recoverMotion(noBounds, null)).toBe(true);
+  expect(noBounds.tip).toEqual(spring(0, 0));
+  expect(noBounds.goal).toEqual({x: 0, y: 0});
+});
+
+test('recoverMotion catches a body that went non-finite on its own', () => {
+  const m = motion({aim: spring(1, 2), tip: spring(1, 2), goal: {x: 1, y: 2}, body: spring(5, NaN, 0, 0)});
+  expect(recoverMotion(m, bounds)).toBe(true);
+  expect(m.body).toBeNull();
+  expect(m.tip).toEqual(spring(1, 2));
 });
