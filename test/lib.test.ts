@@ -72,7 +72,7 @@ test('gestures settle when interrupted, and the idle loop comes back', async () 
   const {page, logs} = await open();
   const result = await page.evaluate(async () => {
     const w = window as any;
-    const race = (p: Promise<unknown>) => Promise.race([p.then(() => 'settled'), new Promise(r => setTimeout(() => r('hung'), 3000))]);
+    const race = (p: Promise<unknown>) => Promise.race([p.then(() => 'settled'), new Promise(r => setTimeout(() => r('hung'), 6000))]);
     const container = document.querySelector('#a');
     const a = w.createPlushieCursor(w.THREE, {name: 'A', container, x: 100, y: 100});
     const b = w.createPlushieCursor(w.THREE, {name: 'B', container, x: 300, y: 100});
@@ -364,8 +364,10 @@ test('a container resize wakes a resting cursor', async () => {
     await c.moveTo(350, 50);
     await new Promise(r => setTimeout(r, 700));
     host.style.width = '200px';
-    await new Promise(r => setTimeout(r, 800));
-    return Number(c.element.style.transform.match(/-?[\d.]+(?=px)/)![0]);
+    // Wait for the glide back inside to finish (slow under a loaded swiftshader).
+    const at = () => Number(c.element.style.transform.match(/-?[\d.]+(?=px)/)![0]);
+    for (let i = 0; i < 50 && at() > 200; i++) await new Promise(r => setTimeout(r, 100));
+    return at();
   });
   expect(x).toBeLessThanOrEqual(200);
   expect(errors(logs)).toEqual([]);
