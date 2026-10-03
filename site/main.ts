@@ -91,6 +91,8 @@ interface Helper {
   cursor: PlushieCursor;
   /** Driven by you (playground or "follows me"): its script waits. */
   manual: boolean;
+  /** Taken over in the playground (until Resume), whatever "follows me" does. */
+  played: boolean;
   /** Whether it floats a plushie (mirrors setPlushie). */
   plushie: boolean;
   /** Bumped to abort whatever the script is doing with this helper. */
@@ -115,6 +117,7 @@ const helpers: Helper[] = LOOKS.map((h, i) => ({
   color: h.color,
   mixed: h.mixed,
   manual: false,
+  played: false,
   plushie: true,
   epoch: 0,
   job: null,
@@ -282,6 +285,8 @@ function dropJob(h: Helper) {
 function interrupt(h: Helper, freeze: boolean) {
   h.epoch++;
   dropJob(h);
+  // Also a finished task's "done" message, still up after its job ended.
+  h.cursor.status(null);
   h.cursor.release();
   if (freeze) {
     const {x, y} = tipOf(h);
@@ -423,8 +428,9 @@ designGroup.addEventListener('keydown', event => {
 const initial = new URLSearchParams(location.search).get('design');
 setDesign(designButtons.some(b => b.dataset.design === initial) ? initial! : 'live', !!initial);
 
-// Pause stops the script mid-step: the cursors stop where they are and drop
-// what they were doing; Play starts them on fresh tasks.
+// Pause stops the scripts mid-step: the cursors stop where they are and drop
+// what they were doing (a "done" message too). Play lets each script pick a
+// fresh task; helpers you drive stay yours.
 const pauseButton = $('#pause');
 pauseButton.addEventListener('click', () => {
   paused = !paused;
@@ -474,7 +480,8 @@ follow.addEventListener('change', () => {
     workspace.addEventListener('pointermove', onMove);
   } else {
     workspace.removeEventListener('pointermove', onMove);
-    helpers[0].manual = false;
+    // Back to its script, unless the playground has it.
+    if (!helpers[0].played) helpers[0].manual = false;
   }
 });
 
@@ -486,8 +493,10 @@ ownPlushie.addEventListener('change', () => {
   syncPlushieBoxes();
 });
 const held = () => {
-  takeOver(chosen());
-  return chosen().cursor;
+  const h = chosen();
+  takeOver(h);
+  h.played = true;
+  return h.cursor;
 };
 const progress = $<HTMLInputElement>('#progress');
 progress.addEventListener('input', () => {
@@ -503,6 +512,7 @@ $('#b-click').addEventListener('click', () => void held().click());
 $('#b-done').addEventListener('click', () => void held().done('All done'));
 $('#b-resume').addEventListener('click', () => {
   for (const h of helpers) {
+    h.played = false;
     if (h === helpers[0] && follow.checked) continue;
     h.manual = false;
   }
