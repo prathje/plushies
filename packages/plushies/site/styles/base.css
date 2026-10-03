@@ -100,7 +100,9 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: var(--display-weight
 .theme-btn[data-mode='auto'] svg circle { fill: color-mix(in oklab, currentColor 45%, transparent); }
 @media (max-width: 560px) {
   .nav-links a:not(.repo-link) { display: none; }
-  .nav-links a[href='#editor'] { display: inline-block; }
+  .nav-links a[href='#editor'], .nav-links a[href='cursors/'] { display: inline-block; }
+  .nav-links { gap: 0; }
+  .nav-links a { padding: 8px 6px; }
 }
 
 /* --- Buttons & small controls --------------------------------------------- */

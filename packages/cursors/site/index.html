@@ -8,11 +8,19 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600&family=Inter:wght@400;500;600;700&family=Nunito:wght@600;800&display=swap" />
+  <script>
+    // The plushies site's theme choice (same origin on GitHub Pages), before first paint.
+    (function () {
+      var t = new URLSearchParams(location.search).get('theme');
+      try { t = t || localStorage.getItem('plushies-theme'); } catch (e) {}
+      if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
+    })();
+  </script>
   <link rel="stylesheet" href="./style.css" />
 </head>
 <body>
   <header class="top">
-    <div class="brand"><span class="dot"></span>plushie cursors</div>
+    <a class="brand" href="../" title="Back to plushies"><span class="dot"></span>plushie cursors</a>
     <div class="seg" role="radiogroup" aria-label="Design" id="designs">
       <button role="radio" data-design="live" aria-checked="true" tabindex="0">Live <small>VideoZero</small></button>
       <button role="radio" data-design="buddy" aria-checked="false" tabindex="-1">Buddy</button>

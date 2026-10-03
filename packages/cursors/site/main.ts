@@ -54,7 +54,8 @@ function drawTimeline(now: number) {
   }
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, w, h);
-  const dark = matchMedia('(prefers-color-scheme: dark)').matches;
+  const theme = document.documentElement.dataset.theme;
+  const dark = theme ? theme === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
   ctx.font = '600 11px Inter, sans-serif';
   ctx.textBaseline = 'middle';
   ['Video', 'Audio'].forEach((name, i) => {

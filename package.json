@@ -2,12 +2,15 @@
   "name": "plushies-monorepo",
   "private": true,
   "type": "module",
-  "workspaces": ["packages/*"],
+  "workspaces": [
+    "packages/*"
+  ],
   "scripts": {
     "typecheck": "bun run --filter '*' typecheck",
     "test": "bun run --cwd packages/plushies test && bun run --cwd packages/cursors test:unit",
     "test:e2e": "bun run --cwd packages/plushies test:e2e && bun run --cwd packages/cursors test:browser",
     "build": "bun run --filter '*' build",
+    "site:build": "bun run --cwd packages/plushies site:build && bun run --cwd packages/cursors site:build --out ../plushies/_site/cursors",
     "vendor": "bun run --cwd packages/plushies build --vendor ../../../engine/assets/vendor/plushies.js"
   }
 }

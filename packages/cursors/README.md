@@ -134,10 +134,11 @@ paintHighlight(ctx, shape.corners(), '#7c3aed', {radius: 4});
 
 ```sh
 bun run site:dev   # the demo, http://localhost:4521
+bun run site:build # the demo as a static site in _site/ (--out <dir> for elsewhere)
 bun run test       # unit tests + browser tests (Playwright)
 bun run build      # dist/index.js and types
 ```
 
-The demo is a mock video editor: an HTML slide plus a timeline drawn on a canvas. Three helpers take turns working on both. The playground lets you take over one helper, and "Pip follows me" makes Pip trail your mouse.
+The demo is published with the plushies site, at `cursors/`. It is a mock video editor: an HTML slide plus a timeline drawn on a canvas. Three helpers take turns working on both. The playground lets you take over one helper, and "Pip follows me" makes Pip trail your mouse.
 
 This package lives in the `plushies` monorepo; run `bun install` at the repo root and the commands above in `packages/cursors`. `plushies` is a workspace dependency (`workspace:*`), which `bun publish` replaces with its version.

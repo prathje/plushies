@@ -30,13 +30,16 @@ jobs:
         run: bun run test
       - name: Build (both packages)
         run: bun run build
-      - name: Build the site
-        run: bun run --cwd packages/plushies site:build
+      - name: Build the site (plushies, with the cursor demo at cursors/)
+        run: bun run site:build
 
       - name: Install Chromium
         run: bunx playwright install --with-deps chromium
-      - name: Browser tests (plushies builds + site, cursors lib + demo)
-        run: bun run test:e2e
+      - name: Browser tests (plushies builds + site)
+        run: bun run --cwd packages/plushies test:e2e
+      - name: Browser tests (cursors lib + demo)
+        if: ${{ !cancelled() }}
+        run: bun run --cwd packages/cursors test:browser
 
       - uses: actions/upload-artifact@v4
         with:

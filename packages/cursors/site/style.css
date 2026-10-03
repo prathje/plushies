@@ -18,11 +18,20 @@
     color-scheme: dark;
   }
 }
+/* Picked on the plushies site. */
+:root[data-theme="dark"] {
+  --bg: #121016;
+  --card: #2a2631;
+  --ink: #f1ece6;
+  --muted: #a59a90;
+  --line: #3b3545;
+  color-scheme: dark;
+}
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.45 Inter, system-ui, sans-serif; min-height: 100vh; }
 
 .top { display: flex; align-items: center; gap: 16px; padding: 14px 24px; flex-wrap: wrap; }
-.brand { font: 600 19px/1 Fredoka, system-ui, sans-serif; display: flex; align-items: center; gap: 8px; margin-right: auto; }
+.brand { color: inherit; text-decoration: none; font: 600 19px/1 Fredoka, system-ui, sans-serif; display: flex; align-items: center; gap: 8px; margin-right: auto; }
 .brand .dot { width: 12px; height: 12px; border-radius: 50%; background: linear-gradient(135deg, #f47c9a, #f5c518); }
 .seg { display: flex; background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 3px; gap: 2px; }
 .seg button { border: 0; background: none; color: var(--ink); font: 600 13px/1 Inter, sans-serif; padding: 8px 12px; border-radius: 9px; cursor: pointer; }
@@ -62,6 +71,8 @@ body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.45 Inte
   /* The stage's navy would melt into the card: ring it and lift it. */
   :root:not([data-theme="light"]) .stage { box-shadow: 0 0 0 1px rgba(255, 255, 255, .14), 0 18px 40px rgba(0, 0, 0, .55); }
 }
+:root[data-theme="dark"] #timeline { background: #1d1a22; }
+:root[data-theme="dark"] .stage { box-shadow: 0 0 0 1px rgba(255, 255, 255, .14), 0 18px 40px rgba(0, 0, 0, .55); }
 
 .panel { background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 18px; align-self: start; display: flex; flex-direction: column; gap: 12px; }
 .panel h2 { margin: 0; font: 600 16px/1.2 Fredoka, sans-serif; }

@@ -14,8 +14,9 @@ bun install          # once, here at the root
 bun run typecheck    # both packages
 bun run test         # unit tests of both
 bun run build        # dist/ of both
-bun run test:e2e     # browser tests of both (Playwright; build and packages/plushies site:build first)
+bun run site:build   # the GitHub Pages site: plushies, with the cursor demo at cursors/
+bun run test:e2e     # browser tests of both (Playwright; build and site:build first)
 bun run vendor       # refresh VideoZero's copy: ../engine/assets/vendor/plushies.js
 ```
 
-Demos: `bun run site:dev` in `packages/plushies` (http://localhost:4517) or `packages/cursors` (http://localhost:4521).
+The site (GitHub Pages) is the plushies site with the cursor demo under `cursors/`, linked from its nav. While developing, run `bun run site:dev` in `packages/plushies` (http://localhost:4517) or `packages/cursors` (http://localhost:4521).

@@ -1,4 +1,4 @@
-/** The GitHub Pages site: renders, the editor drives the plushie and the code, links round-trip. Needs `bun run site:build`. */
+/** The GitHub Pages site: renders, the editor drives the plushie and the code, links round-trip. Needs `bun run site:build` at the repo root (it adds the cursor demo). */
 import {afterAll, beforeAll, expect, test} from 'bun:test';
 import {drawnBytes, launch} from './browser';
 
@@ -76,8 +76,24 @@ test('phone layout has no sideways scroll', async () => {
     await page.waitForTimeout(300);
     expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBe(0);
   }
+  // The nav (Editor, Cursors, GitHub on CI) leaves the theme button on screen.
+  const button = (await page.locator('.theme-btn').boundingBox())!;
+  expect(button.x + button.width).toBeLessThanOrEqual(390);
   await page.locator('.theme-btn').click();
   expect(await page.evaluate(() => document.documentElement.dataset.theme)).toBe('light');
+  expect(errors()).toEqual([]);
+  await page.close();
+}, 180_000);
+
+test('the nav leads to the cursor demo, which keeps the theme and links back', async () => {
+  // Built into _site/cursors/ by the repo root's `bun run site:build`.
+  const {page, errors} = await browser.page('/_site/');
+  await page.evaluate(() => localStorage.setItem('plushies-theme', 'dark'));
+  await page.locator('.nav-links a', {hasText: 'Cursors'}).click();
+  await page.waitForURL(/\/_site\/cursors\/$/);
+  await page.waitForFunction(() => document.querySelectorAll('.pc-cursor').length === 3, null, {timeout: 60_000});
+  expect(await page.evaluate(() => document.documentElement.dataset.theme)).toBe('dark');
+  expect(await page.locator('a.brand').evaluate(a => (a as HTMLAnchorElement).href)).toBe(browser.url('/_site/'));
   expect(errors()).toEqual([]);
   await page.close();
 }, 180_000);

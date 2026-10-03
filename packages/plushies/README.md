@@ -170,8 +170,8 @@ bun run typecheck   # tsc over src, tests and site
 bun run test        # unit tests (bun:test, headless three)
 bun run build       # dist/: ESM + CJS (three external), bundled ESM + global (three included), d.ts
 bun run site:dev    # the demo/editor site with live reload on http://localhost:4517
-bun run site:build  # _site/
-bun run test:e2e    # Playwright: the three builds and the site in Chromium (needs build + site:build)
+bun run site:build  # _site/ (the repo root's site:build also adds the cursor demo at _site/cursors/)
+bun run test:e2e    # Playwright: the three builds and the site in Chromium (needs build + the root's site:build)
 bun run check       # typecheck + test + build + site:build
 ```
 
