@@ -1,0 +1,39 @@
+{
+  "name": "plushie-cursors",
+  "version": "0.1.0",
+  "description": "Floating plushie cursors for AI helpers: a plush character with its own pointer, name tag and a live status box.",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": ["dist", "README.md"],
+  "sideEffects": false,
+  "scripts": {
+    "build": "bun run build.ts",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "bun test test",
+    "site:dev": "bun --port 4521 site/index.html"
+  },
+  "dependencies": {
+    "plushies": "file:../plushies"
+  },
+  "peerDependencies": {
+    "three": ">=0.160.0"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.3.2",
+    "@types/three": "^0.186.0",
+    "playwright": "^1.55.0",
+    "three": "^0.186.0",
+    "typescript": "^5.9.3"
+  },
+  "keywords": ["plushies", "cursor", "presence", "multiplayer", "ai", "agent", "three"]
+}
