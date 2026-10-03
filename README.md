@@ -8,8 +8,8 @@ body as separate pieces. Everything that
 moves — eye direction, blink, squash & stretch, hop, lean, turn — is a plain
 number you can set every frame.
 
-**[Live demo and editor →](https://OWNER.github.io/plushies/)** — configure a
-plushie and copy the code.
+**Demo and editor:** run `bun install && bun run site:dev` and open
+<http://localhost:4517> — configure a plushie and copy the code.
 
 ## Install
 
@@ -17,13 +17,16 @@ Three builds, depending on what your page already has:
 
 | you have | use | size (gzip) |
 |---|---|---|
-| a bundler and three.js | `plushies` / `plushies/viewer` (three is a peer dependency) | ~14 kB |
+| a bundler and three.js | `plushies` / `plushies/viewer` (three is a peer dependency) | ~22 kB (`index.js` ~19.8 + `viewer.js` ~2.5) |
 | a bundler, no three.js | `plushies/bundled` (three included) | ~200 kB |
 | a plain HTML page | `dist/plushies.global.js` → `window.Plushies` (three included) | ~200 kB |
 
 ```sh
 npm i plushies three
 ```
+
+The CDN snippets below and on the site work once the package is published to
+npm.
 
 ```html
 <!-- no build step, three bundled in -->
@@ -57,7 +60,7 @@ small build and pass your copy in.
 ```
 
 The canvas is transparent and fills its container. The viewer only renders
-while something changes. Every viewer on the page draws through one shared,
+while something changes, and pauses while it is scrolled off-screen. Every viewer on the page draws through one shared,
 hidden WebGL context, so you can mount dozens without hitting the browser's
 limit of about 16 contexts.
 
@@ -65,10 +68,12 @@ limit of about 16 contexts.
 |---|---|
 | `view.set(pose)` | set pose fields right away |
 | `view.to(pose, seconds, ease)` | tween numeric pose fields; resolves when done |
-| `view.look(x, y)` · `view.blink()` · `view.hop(height)` · `view.squish(amount)` | little performances, all promises |
-| `view.restyle(options)` | swap the look in place, keeping the pose |
+| `view.look(x, y)` · `view.blink()` · `view.hop(height)` · `view.squish(amount)` | little performances, all promises; `hop()` defaults to a height that fits the container: min(90, 20% of its height) px |
+| `view.stop()` | stop every running tween where it is; their promises resolve |
+| `view.restyle(options)` | change the look in place, keeping the pose. `options` is **merged** into the current look (pass `undefined` to reset a key); only the fur length resets, to the new fabric's, unless you give `fur` |
+| `view.options` | the current look: the mount options merged with every `restyle` |
 | `view.setIdle(on)` · `view.setFollowPointer(on)` | toggle the idle loop / pointer following |
-| `view.dispose()` | remove the canvas and free its GPU resources (the shared context goes with the last viewer) |
+| `view.dispose()` | remove the canvas and free its GPU resources (the shared context goes with the last viewer); pending promises resolve, and calling it twice is fine |
 
 With `plushies/bundled` or the global build, drop the `THREE` argument:
 `mountPlushie(element, options)` / `createPlushie(options)`.
@@ -110,7 +115,7 @@ points, e.g. for icons).
 | `seed` | shape of `blob` | 1 |
 | `thickness` | stuffing, relative to half-width | 0.42 |
 | `fabric` | plush, felt, velvet, shaggy, fleece | plush |
-| `furGrain` | strand size multiplier | from fabric |
+| `furGrain` | strand size, replacing the fabric's own (smaller is finer, denser fur) | from fabric: plush 1, felt 0.8, velvet 0.9, shaggy 1.7, fleece 2.8 |
 | `finish` | surface of eyes, mouth, moustache, glasses, neckwear, pins: gloss, satin, matte, felt | satin |
 | `eyes` | dot, oval, googly, ring, happy, sleepy, none | dot |
 | `eyeSize`, `eyeSpacing` | multipliers | 1 |
@@ -127,6 +132,11 @@ points, e.g. for icons).
 | `headroom` | free space above for hops, fraction of body height | 0.22 |
 | `shadow` | contact shadow | true |
 
+Colours accept any CSS colour: hex, names, `rgb()`/`hsl()` in comma or space
+syntax, and `oklch()`/`lab()` and friends (resolved through the browser). An
+unknown colour warns once in the console and falls back to the default; any
+other invalid option does the same.
+
 ## Pose (per frame)
 
 | field | meaning | default |
@@ -140,7 +150,7 @@ points, e.g. for icons).
 | `lean`, `turn` | degrees | 0 |
 | `float` | how far accessories float off the body | 1 |
 | `fur` | fur length, fraction of half-width | from fabric |
-| `color` | fur colour, CSS string or sRGB `[r, g, b]` 0..1 | #f2b33d |
+| `color` | fur colour, any CSS colour or sRGB `[r, g, b]` 0..1 | #f2b33d |
 
 ## Performance
 
@@ -155,7 +165,7 @@ bun install
 bun run typecheck   # tsc over src, tests and site
 bun run test        # unit tests (bun:test, headless three)
 bun run build       # dist/: ESM + CJS (three external), bundled ESM + global (three included), d.ts
-bun run site:dev    # the GitHub Pages site with live reload on http://localhost:4517
+bun run site:dev    # the demo/editor site with live reload on http://localhost:4517
 bun run site:build  # _site/
 bun run test:e2e    # Playwright: the three builds and the site in Chromium (needs build + site:build)
 bun run check       # typecheck + test + build + site:build

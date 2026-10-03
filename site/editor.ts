@@ -17,6 +17,7 @@ import {FLAVORS, highlight, snippet, type Flavor} from './code';
 import {HERO_LOOK, SWATCHES, type Look} from './looks';
 import {
   FIELD,
+  FIELDS,
   GROUPS,
   POSE_KEYS,
   decodeState,
@@ -31,6 +32,10 @@ import {copyText, plushVars, reducedMotion, tabs} from './ui';
 export interface Editor {
   load(look: Look): void;
 }
+
+/** Every look key, unset ones as `undefined`: restyle merges, so an unset key must reset explicitly. */
+const LOOK_KEYS = FIELDS.filter(f => f.where === 'look').map(f => f.key);
+const fullLook = (look: Look): Look => ({...Object.fromEntries(LOOK_KEYS.map(k => [k, undefined])), ...look});
 
 const fixed = (v: number, step: number) => v.toFixed(step >= 1 ? 0 : step >= 0.1 ? 1 : step >= 0.01 ? 2 : 3);
 
@@ -208,7 +213,7 @@ export function createEditor(root: {
     restyleQueued = true;
     requestAnimationFrame(() => {
       restyleQueued = false;
-      view.restyle(state.look);
+      view.restyle(fullLook(state.look));
     });
   };
 
@@ -237,8 +242,12 @@ export function createEditor(root: {
 
   function load(next: EditorState) {
     state = next;
-    view.restyle(state.look);
-    view.set(Object.fromEntries(POSE_KEYS.map(k => [k, state.pose[k] ?? FIELD.get(k)!.default])));
+    view.restyle(fullLook(state.look));
+    // Colour is a pose field: restyle keeps the current one.
+    view.set({
+      color: String(state.look.color ?? FIELD.get('color')!.default),
+      ...Object.fromEntries(POSE_KEYS.map(k => [k, state.pose[k] ?? FIELD.get(k)!.default])),
+    });
     view.setIdle(state.idle);
     view.setFollowPointer(state.follow);
     refresh();
@@ -247,7 +256,9 @@ export function createEditor(root: {
   function refresh() {
     syncers.forEach(f => f());
     const code = snippet(flavor, state);
-    root.code.querySelector('code')!.innerHTML = highlight(code, FLAVORS.find(f => f.id === flavor)!.lang);
+    const lang = FLAVORS.find(f => f.id === flavor)!.lang;
+    root.code.querySelector('code')!.innerHTML = highlight(code, lang);
+    root.code.dataset.lang = lang;
     root.code.dataset.text = code;
     const query = encodeState(state);
     root.share.value = `${location.origin}${location.pathname}${query ? `?${query}` : ''}#editor`;
@@ -300,6 +311,18 @@ export function createEditor(root: {
         void view.hop(60);
       }
     });
+  }
+
+  // On narrow screens the toolbar scrolls sideways; fade the edge that hides chips.
+  const toolbar = root.stage.querySelector<HTMLElement>('.stage-toolbar');
+  if (toolbar) {
+    const edges = () => {
+      const max = toolbar.scrollWidth - toolbar.clientWidth;
+      toolbar.classList.toggle('more-left', toolbar.scrollLeft > 1);
+      toolbar.classList.toggle('more-right', toolbar.scrollLeft < max - 1);
+    };
+    toolbar.addEventListener('scroll', edges, {passive: true});
+    new ResizeObserver(edges).observe(toolbar);
   }
 
   refresh();

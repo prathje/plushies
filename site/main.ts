@@ -38,7 +38,7 @@ const editor = createEditor({
   shareCopy: $<HTMLButtonElement>('#share-copy'),
 });
 
-// Gallery: each card mounts when it first scrolls near, and only idles while visible.
+// Gallery: each card mounts when it first scrolls near, and only idles and follows the pointer while visible.
 const grid = $('#gallery-grid');
 const viewers = new Map<Element, PlushieViewer>();
 const visibility = new IntersectionObserver(
@@ -48,11 +48,12 @@ const visibility = new IntersectionObserver(
       let view = viewers.get(card);
       if (!view && entry.isIntersecting) {
         const item = GALLERY[Number(card.dataset.index)];
-        view = mountPlushie(card.querySelector<HTMLElement>('.plush-host')!, THREE, {...item.look, followPointer: true});
+        view = mountPlushie(card.querySelector<HTMLElement>('.plush-host')!, THREE, item.look);
         view.canvas.addEventListener('click', () => void view!.hop(50));
         viewers.set(card, view);
       }
       view?.setIdle(entry.isIntersecting && !calm);
+      view?.setFollowPointer(entry.isIntersecting);
     }
   },
   {rootMargin: '200px'},

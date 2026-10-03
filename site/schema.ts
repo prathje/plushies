@@ -18,6 +18,7 @@ import {
   PLUSHIE_PINS,
   ACCESSORY_COLORS,
   fabricFur,
+  fabricGrain,
 } from '../src/index';
 import type {Look} from './looks';
 
@@ -109,7 +110,11 @@ export const GROUPS: Group[] = [
         type: 'range', key: 'fur', label: 'Fur length', where: 'look', min: 0, max: 0.16, step: 0.002,
         default: look => fabricFur(look.fabric), auto: true, doc: 'Fur length as a fraction of the half-width (a pose field).',
       },
-      {type: 'range', key: 'furGrain', label: 'Strand size', where: 'look', min: 0.3, max: 2.5, step: 0.05, default: 1, auto: true, doc: 'Strand size multiplier; smaller is finer, denser fur.'},
+      {
+        type: 'range', key: 'furGrain', label: 'Strand size', where: 'look', min: 0.3, max: 3.2, step: 0.05,
+        default: look => fabricGrain(look.fabric ?? D.fabric), auto: true,
+        doc: "Strand size; replaces the fabric's own (plush 1, felt 0.8, velvet 0.9, shaggy 1.7, fleece 2.8). Smaller is finer, denser fur.",
+      },
     ],
   },
   {
@@ -202,6 +207,8 @@ export function lookDiff(look: Look): [string, string | number | boolean][] {
     if (field.where !== 'look') continue;
     const value = (look as Record<string, unknown>)[field.key] as string | number | boolean | undefined;
     if (value === undefined) continue;
+    // Hidden by another option (sides of a blob): it does nothing, so leave it out.
+    if (field.when && !field.when(look)) continue;
     if (!('auto' in field && field.auto) && value === resolveDefault(field, look)) continue;
     out.push([field.key, value]);
   }

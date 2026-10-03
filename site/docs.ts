@@ -29,7 +29,7 @@ const view = mountPlushie(document.querySelector('#hero'), THREE, {
   {
     id: 'script',
     label: 'Script tag',
-    intro: 'No build step and no three.js of your own: the global build has three bundled in and puts everything on window.Plushies.',
+    intro: 'No build step and no three.js of your own: the global build has three bundled in and puts everything on window.Plushies. (CDN links work once the package is published to npm.)',
     blocks: [
       [
         'html',
@@ -48,7 +48,7 @@ const view = mountPlushie(document.querySelector('#hero'), THREE, {
   {
     id: 'esm',
     label: 'ES modules',
-    intro: 'Modules straight from a CDN. Map three yourself and use the small build, or import the bundled one that brings its own three.',
+    intro: 'Modules straight from a CDN (once the package is published to npm). Map three yourself and use the small build, or import the bundled one that brings its own three.',
     blocks: [
       [
         'html',
@@ -76,10 +76,12 @@ const VIEWER_API: [string, string][] = [
   ['view.set(pose)', 'Set pose fields right away: <code>lookX</code>, <code>blink</code>, <code>squash</code>, <code>color</code>…'],
   ['view.to(pose, seconds, ease)', 'Tween numeric pose fields. Resolves when done.'],
   ['view.look(x, y)', 'Point the eyes, −1..1 each.'],
-  ['view.hop(height) · view.squish() · view.blink()', 'Little performances with anticipation and settle. All return promises.'],
-  ['view.restyle(options)', 'Swap the look in place (new shape, fabric, hat…), keeping the pose.'],
-  ['view.setIdle(on) · view.setFollowPointer(on)', 'Turn the idle loop and pointer-following on or off.'],
-  ['view.dispose()', 'Remove the canvas and free the GPU.'],
+  ['view.hop(height) · view.squish() · view.blink()', 'Little performances with anticipation and settle. All return promises. <code>hop()</code> jumps as high as fits the container: a fifth of its height, at most 90 px.'],
+  ['view.stop()', 'Stop every running tween where it is; their promises resolve.'],
+  ['view.restyle(options)', 'Change the look in place (new shape, fabric, hat…), keeping the pose. Merged into the current look: pass <code>undefined</code> to reset an option. Fur length resets to the new fabric\'s unless given.'],
+  ['view.options', 'The current look: the mount options merged with every <code>restyle</code>.'],
+  ['view.setIdle(on) · view.setFollowPointer(on)', 'Turn the idle loop and pointer-following on or off. Off-screen viewers pause rendering.'],
+  ['view.dispose()', 'Remove the canvas and free the GPU. Pending promises resolve; safe to call twice.'],
   ['createPlushie(THREE, options)', 'Just the object, for your own scene: <code>{object, pose, set, dispose}</code>.'],
   ['plushieOutline(kind, options)', 'The flat silhouette as points — handy for icons.'],
 ];
@@ -125,7 +127,7 @@ export function renderDocs(root: HTMLElement) {
 
   const sizes = document.createElement('div');
   sizes.className = 'callout';
-  sizes.innerHTML = `<p><strong>three external or bundled?</strong> The core is about <strong>14 kB</strong> gzipped and uses the three.js you pass in (r160 or newer). The bundled builds (<code>plushies/bundled</code>, <code>plushies.global.js</code>) carry their own three and weigh about <strong>200 kB</strong> gzipped. If your page already has three, use the small one — two copies of three don't mix.</p>`;
+  sizes.innerHTML = `<p><strong>three external or bundled?</strong> The core is about <strong>22 kB</strong> gzipped and uses the three.js you pass in (r160 or newer). The bundled builds (<code>plushies/bundled</code>, <code>plushies.global.js</code>) carry their own three and weigh about <strong>200 kB</strong> gzipped. If your page already has three, use the small one — two copies of three don't mix.</p>`;
 
   const scene = document.createElement('div');
   scene.className = 'doc-card';
@@ -155,7 +157,7 @@ renderer.setAnimationLoop(time => {
 
   const options = document.createElement('div');
   options.className = 'doc-card';
-  options.innerHTML = `<h3>Every option</h3><p>Look options are fixed when the plushie is built (<code>restyle</code> to change them); pose fields are cheap to set every frame.</p>
+  options.innerHTML = `<h3>Every option</h3><p>Look options are fixed when the plushie is built (<code>restyle</code> to change them); pose fields are cheap to set every frame. Colours take any CSS colour (hex, names, <code>rgb()</code>/<code>hsl()</code>, <code>oklch()</code>…). An invalid value warns once in the console and falls back to its default.</p>
     <div class="table-wrap"><table class="options">
       <thead><tr><th>option</th><th>values</th><th>default</th><th>what it does</th></tr></thead>
       <tbody>${GROUPS.map(

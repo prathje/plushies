@@ -199,8 +199,12 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: var(--display-weight
 }
 .editor-stage .plush-host { inset: 0 0 56px; }
 @media (max-width: 959px) {
-  /* Keep the preview in view while the controls scroll beneath it. */
-  .editor-stage { position: sticky; top: 64px; z-index: 5; aspect-ratio: auto; height: 44vh; min-height: 260px; }
+  /* Keep the preview in view while the controls scroll beneath it: the stage,
+     controls and code become siblings so the sticky stage spans all of them. */
+  .editor-main { display: contents; }
+  .editor-stage { position: sticky; top: 64px; z-index: 5; aspect-ratio: auto; height: 38vh; min-height: 240px; max-height: 420px; }
+  .controls { order: 1; }
+  .code-card { order: 2; }
 }
 .stage-toolbar {
   position: absolute; z-index: 2; left: 10px; right: 10px; bottom: 10px;
@@ -208,9 +212,14 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: var(--display-weight
 }
 .toolbar-gap { flex: 1; }
 @media (max-width: 560px) {
-  .stage-toolbar { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
-  .stage-toolbar .chip { flex: none; min-height: 32px; padding: 0 11px; }
+  .stage-toolbar { left: 8px; right: 8px; bottom: 8px; gap: 5px; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  .stage-toolbar::-webkit-scrollbar { display: none; }
+  .stage-toolbar .chip { flex: none; min-height: 32px; padding: 0 10px; font-size: 0.8rem; }
   .toolbar-gap { display: none; }
+  /* Fade the edge that has more chips behind it (editor.ts sets the classes). */
+  .stage-toolbar.more-right { mask-image: linear-gradient(90deg, #000 calc(100% - 36px), transparent); }
+  .stage-toolbar.more-left { mask-image: linear-gradient(90deg, transparent, #000 36px); }
+  .stage-toolbar.more-left.more-right { mask-image: linear-gradient(90deg, transparent, #000 36px calc(100% - 36px), transparent); }
 }
 
 .code-card { display: grid; gap: 12px; min-width: 0; padding: 14px; border-radius: var(--r-l); background: var(--bg-2); }
@@ -219,7 +228,14 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: var(--display-weight
   margin: 0; padding: 18px 20px; border-radius: var(--r-m); overflow: auto; max-height: 420px;
   background: var(--code-bg); color: var(--code-ink); font-size: 0.84rem; line-height: 1.65; tab-size: 2;
 }
-.code-copy { position: absolute; top: 10px; right: 10px; color: var(--code-ink); background: color-mix(in oklab, var(--code-bg) 80%, transparent); }
+/* The copy button sits in a strip above the code, outside the scrolling area, so it never covers text. */
+.code-wrap:has(.code-copy) { padding-top: 40px; border-radius: var(--r-m); background: var(--code-bg); color: var(--code-ink); }
+.code-wrap:has(.code-copy) .code { padding-top: 6px; border-radius: 0 0 var(--r-m) var(--r-m); box-shadow: none; }
+.code-wrap:has(.code-copy) .code::before {
+  content: attr(data-lang); position: absolute; top: 15px; left: 20px;
+  font: 600 0.7rem/1 var(--font-body); text-transform: uppercase; letter-spacing: 0.08em; opacity: 0.55;
+}
+.code-copy { position: absolute; top: 6px; right: 8px; color: var(--code-ink); }
 .tok-kw { color: var(--tok-kw); }
 .tok-str { color: var(--tok-str); }
 .tok-num { color: var(--tok-num); }
@@ -346,6 +362,21 @@ input[type='range']:focus-visible { outline: 2px solid var(--focus); outline-off
 .options thead th { font: 700 0.72rem/1 var(--font-body); text-transform: uppercase; letter-spacing: 0.07em; color: var(--ink-2); }
 .options-group th { padding-top: 20px; font: var(--display-weight) 1rem/1 var(--font-display); }
 .options td:nth-child(2) code { display: inline-block; margin: 0 2px 3px 0; }
+@media (max-width: 640px) {
+  /* One card per option instead of a table that scrolls sideways. */
+  .table-wrap { overflow: visible; margin: 0; padding: 0; }
+  .options { min-width: 0; }
+  .options thead { display: none; }
+  .options tbody { display: block; }
+  .options tr { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+  .options th, .options td { display: block; padding: 0; border: 0; min-width: 0; }
+  .options td:nth-child(2), .options td:nth-child(4) { grid-column: 1 / -1; }
+  .options td:nth-child(2) { grid-row: 2; }
+  .options td:nth-child(3) { grid-column: 2; grid-row: 1; text-align: right; }
+  .options td:nth-child(3)::before { content: 'default '; color: var(--ink-2); font-size: 0.75rem; }
+  .options td:nth-child(4) { color: var(--ink-2); }
+  .options-group th { grid-column: 1 / -1; padding-top: 16px; }
+}
 
 /* --- Footer ------------------------------------------------------------------- */
 .footer { margin-top: 48px; background: var(--bg-2); }
