@@ -20,10 +20,13 @@ export function svg(markup: string, className = '', parent?: Element): SVGSVGEle
 export type StyleRoot = Document | ShadowRoot;
 
 const injected = new WeakMap<StyleRoot, Set<string>>();
+/** Every stylesheet injected so far, to copy into a root found later. */
+const sheets = new Map<string, string>();
 
 /** Add a stylesheet once per page (or shadow root). */
 export function injectStyle(id: string, css: string, root: StyleRoot = document) {
   if (typeof document === 'undefined') return;
+  sheets.set(id, css);
   let ids = injected.get(root);
   if (!ids) injected.set(root, (ids = new Set()));
   if (ids.has(id)) return;
@@ -32,6 +35,11 @@ export function injectStyle(id: string, css: string, root: StyleRoot = document)
   style.dataset.plushieCursors = id;
   style.textContent = css;
   (root instanceof Document ? root.head : root).append(style);
+}
+
+/** Add every stylesheet injected so far to `root` (a container that turned out to live in a shadow root). */
+export function injectStyles(root: StyleRoot) {
+  for (const [id, css] of sheets) injectStyle(id, css, root);
 }
 
 /** The style root an element renders in. */

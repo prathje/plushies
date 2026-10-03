@@ -228,3 +228,173 @@ test('the ticker sleeps once a still cursor has settled', async () => {
   expect(writes).toBe(0);
   await page.close();
 }, 60_000);
+
+test('a target that throws is lost, and the other cursors keep moving', async () => {
+  const {page, logs} = await open();
+  const r = await page.evaluate(async () => {
+    const w = window as any;
+    const container = document.querySelector('#a');
+    const a = w.createPlushieCursor(null, {name: 'A', container, x: 50, y: 50});
+    const b = w.createPlushieCursor(null, {name: 'B', container, x: 50, y: 300});
+    const mark = b.highlight(() => {
+      throw new Error('mark boom');
+    });
+    const thrown = a.pointAt(() => {
+      throw new Error('boom');
+    });
+    const moved = b.moveTo(400, 300);
+    const lost = await thrown;
+    const results = [lost, await moved, await a.pointAt('#thing'), await a.moveTo(200, 100)];
+    mark.clear();
+    return results;
+  });
+  expect(r).toEqual(['lost', 'arrived', 'lost', 'arrived']);
+  expect(logs.some(l => /target threw/.test(l))).toBe(true);
+  expect(logs.some(l => /not "#thing"/.test(l))).toBe(true);
+  expect(errors(logs)).toEqual([]);
+  await page.close();
+}, 60_000);
+
+test('pointAt(null) lets go, supersedes the move and stays put', async () => {
+  const {page, logs} = await open();
+  const r = await page.evaluate(async () => {
+    const w = window as any;
+    const tipOf = (c: any) => (c.element.style.transform.match(/-?[\d.]+(?=px)/g) ?? []).map(Number);
+    const a = document.querySelector('#a') as HTMLElement;
+    const c = w.createPlushieCursor(null, {name: 'A', container: a, x: 50, y: 50});
+    const far = c.moveTo(500, 350);
+    await new Promise(r => setTimeout(r, 120));
+    const none = await c.pointAt(null);
+    const stopped = tipOf(c);
+    await new Promise(r => setTimeout(r, 800));
+    const after = tipOf(c);
+    // Following, then let go: the target moves on without it.
+    const thing = document.querySelector('#thing') as HTMLElement;
+    await c.pointAt(thing);
+    await c.pointAt(undefined);
+    const held = tipOf(c);
+    thing.style.left = '300px';
+    await new Promise(r => setTimeout(r, 500));
+    thing.style.left = '';
+    return {results: [await far, none], stopped, after, held, later: tipOf(c)};
+  });
+  expect(r.results).toEqual(['superseded', 'lost']);
+  // It eases to a stop near where it was let go, nowhere near 500, 350.
+  expect(Math.hypot(r.after[0] - r.stopped[0], r.after[1] - r.stopped[1])).toBeLessThan(40);
+  expect(r.after[0]).toBeLessThan(300);
+  expect(Math.hypot(r.later[0] - r.held[0], r.later[1] - r.held[1])).toBeLessThan(5);
+  expect(errors(logs)).toEqual([]);
+  await page.close();
+}, 60_000);
+
+test('a label that grows near the edge flips once its morph is over', async () => {
+  const {page, logs} = await open();
+  const r = await page.evaluate(async () => {
+    const w = window as any;
+    const a = document.querySelector('#a') as HTMLElement;
+    const c = w.createPlushieCursor(null, {name: 'A', design: 'island', container: a, x: 450, y: 100});
+    await c.moveTo(450, 100);
+    await new Promise(r => setTimeout(r, 300));
+    const before = c.element.classList.contains('pc-flip-x');
+    c.status({text: 'Rewriting the whole headline so it fits on two lines', detail: 'Trying a few options'});
+    await new Promise(r => setTimeout(r, 1000));
+    const box = c.element.querySelector('.pc-box')!.getBoundingClientRect();
+    return {before, after: c.element.classList.contains('pc-flip-x'), right: box.right, edge: a.getBoundingClientRect().right};
+  });
+  expect(r.before).toBe(false);
+  expect(r.after).toBe(true);
+  expect(r.right).toBeLessThanOrEqual(r.edge);
+  expect(errors(logs)).toEqual([]);
+  await page.close();
+}, 60_000);
+
+test('layers survive a wiped container and containers attached later', async () => {
+  const {page, logs} = await open();
+  const r = await page.evaluate(async () => {
+    const w = window as any;
+    const b = document.querySelector('#b') as HTMLElement;
+    const old = w.createPlushieCursor(null, {name: 'Old', container: b});
+    b.innerHTML = '';
+    const fresh = w.createPlushieCursor(null, {name: 'New', container: b, x: 50, y: 50});
+    const layersAfterWipe = b.querySelectorAll('.pc-layer').length;
+    old.dispose();
+    const stillThere = fresh.element.isConnected;
+    const moved = await fresh.moveTo(200, 200);
+    fresh.dispose();
+    const layersAfter = b.querySelectorAll('.pc-layer').length;
+    // A container still being built, then put into a shadow root.
+    const host = document.querySelector('#host') as HTMLElement;
+    const shadow = host.attachShadow({mode: 'open'});
+    const box = document.createElement('div');
+    box.style.cssText = 'width:300px;height:200px';
+    const one = w.createPlushieCursor(null, {name: 'One', container: box});
+    const two = w.createPlushieCursor(null, {name: 'Two', container: box});
+    shadow.append(box);
+    await new Promise(r => setTimeout(r, 200));
+    const layers = box.querySelectorAll('.pc-layer').length;
+    const position = box.style.position;
+    const layerPosition = getComputedStyle(box.querySelector('.pc-layer')!).position;
+    const designStyled = getComputedStyle(one.element.querySelector('.pc-label, .pc-box, .pc-tag') ?? one.element.firstElementChild!).position;
+    one.dispose();
+    two.dispose();
+    return {layersAfterWipe, stillThere, moved, layersAfter, layers, position, layerPosition, designStyled, restored: box.style.position};
+  });
+  expect(r).toEqual({
+    layersAfterWipe: 1,
+    stillThere: true,
+    moved: 'arrived',
+    layersAfter: 0,
+    layers: 1,
+    position: 'relative',
+    layerPosition: 'absolute',
+    designStyled: 'absolute',
+    restored: '',
+  });
+  expect(errors(logs)).toEqual([]);
+  await page.close();
+}, 60_000);
+
+test('a container resize wakes a resting cursor', async () => {
+  const {page, logs} = await open();
+  const x = await page.evaluate(async () => {
+    const w = window as any;
+    const host = document.querySelector('#host') as HTMLElement;
+    host.style.cssText = 'position:absolute;left:0;top:0;width:400px;height:300px';
+    const c = w.createPlushieCursor(null, {name: 'A', design: 'island', container: host, x: 350, y: 50});
+    await c.moveTo(350, 50);
+    await new Promise(r => setTimeout(r, 700));
+    host.style.width = '200px';
+    await new Promise(r => setTimeout(r, 800));
+    return Number(c.element.style.transform.match(/-?[\d.]+(?=px)/)![0]);
+  });
+  expect(x).toBeLessThanOrEqual(200);
+  expect(errors(logs)).toEqual([]);
+  await page.close();
+}, 60_000);
+
+test('a hidden bobbing cursor stops animating', async () => {
+  const {page} = await open();
+  const writes = await page.evaluate(async () => {
+    const w = window as any;
+    // Bare: 'live' bobs without a plushie too (and no WebGL to slow the frames).
+    const c = w.createPlushieCursor(null, {name: 'Bob', design: 'live', container: document.querySelector('#a'), x: 100, y: 100});
+    await new Promise(r => setTimeout(r, 300));
+    const count = async () => {
+      let n = 0;
+      const observer = new MutationObserver(list => (n += list.length));
+      observer.observe(c.element, {attributes: true, attributeFilter: ['style']});
+      observer.observe(c.element.querySelector('.pc-body')!, {attributes: true, attributeFilter: ['style']});
+      await new Promise(r => setTimeout(r, 1000));
+      observer.disconnect();
+      return n;
+    };
+    const shown = await count();
+    c.show(false);
+    // A frame or two to go to rest (frames can be slow on a busy machine).
+    await new Promise(r => setTimeout(r, 600));
+    return {shown, hidden: await count()};
+  });
+  expect(writes.shown).toBeGreaterThan(0);
+  expect(writes.hidden).toBe(0);
+  await page.close();
+}, 60_000);

@@ -70,12 +70,12 @@ Both resolve with how the move ended:
 |---|---|
 | `'arrived'` | It got there (a `pointAt` cursor keeps following afterwards). |
 | `'superseded'` | A newer `moveTo` or `pointAt` took over before it arrived. |
-| `'lost'` | The target went away: removed from the page, its function returned `null`, or `pointAt(null)` (as `querySelector` gives you). The cursor stops following and stays put. Also for a `moveTo` with non-numbers, which is ignored with a warning. |
+| `'lost'` | The target went away: removed from the page, its function returned `null` or threw, or `pointAt(null)` (as `querySelector` gives you). The cursor stops following and stays put; `pointAt(null)` also supersedes a move in flight. Also for a `moveTo` with non-numbers or a `pointAt` with something that isn't a target (a selector string, say), which are ignored with a warning. |
 | `'disposed'` | The cursor was disposed. |
 
 Status:
 
-- **`status(text | {text, detail, progress, step, busy})`**: shows what the helper is working on; `null` or `''` clears it. `progress` is 0..1; `step: [n, m]` shows "n/m"; `busy: false` makes it a plain note.
+- **`status(text | {text, detail, progress, step, busy})`**: shows what the helper is working on; `null` or `''` clears it. Any status call ends a `done` message still showing. `progress` is 0..1; `step: [n, m]` shows "n/m"; `busy: false` makes it a plain note.
 - **`progress(value, step?)`**: changes only the progress; with no status yet it starts a "Working…" one.
 - **`say(text, seconds = 2.6)`**: shows a one-off message over the status.
 - **`click()`**: the pointer dips, a ripple spreads from the tip and the plushie squishes. Resolves when the squish is over.
@@ -89,7 +89,8 @@ Highlights:
 
 Changing a cursor:
 
-- **`setDesign(design)`**, **`setName(name)`**, **`setPlushie(on)`**, **`show(on)`**.
+- **`setDesign(design)`**, **`setName(name)`**, **`setPlushie(on)`**.
+- **`show(on)`**: hides or shows the cursor; hidden, it stops animating.
 - **`setColor(color)`**: a new accent colour.
 - **`setLook(look)`**: changes the plushie's look, merged into the current one.
 - **`dispose()`**: removes the cursor and its highlights (and the layer, once its last cursor is gone). Pending moves resolve `'disposed'`, pending `click`/`done` promises resolve, and later calls do nothing.
@@ -98,6 +99,8 @@ Read-only: `element` (the cursor's element), `design`, and `viewer`, the plushie
 
 The plushie leans into its motion, turns toward where it's going, looks at what it points at and wobbles while it works. Movement uses springs, like the editor: the pointer eases out of rest and lands without overshoot, and the plushie trails it on a softer spring, never more than a short leash behind. Near the edges of the container's visible area the cursor mirrors itself so its label stays on screen (with some slack so it doesn't flicker at the edge), and its tip stays inside that area: a cursor whose target scrolls away waits at the edge. With `prefers-reduced-motion`, the plushie's idle loop, bob, sway and every CSS animation stop, and text appears at once.
 
+All cursors share one `requestAnimationFrame` loop, which stops when nothing is animating: a cursor at rest costs nothing. Bobbing designs (`'live'`, and `'buddy'` with its plushie) and a busy plushie animate while they're visible, and a cursor following a target reads its box every frame; hidden cursors (`show(false)`), containers scrolled out of view and background tabs don't. Window resizes, scrolls and the container resizing wake resting cursors; a layout change they can't see (a new CSS transform on an ancestor) shows at the cursor's next call.
+
 ## Targets: HTML or canvas
 
 A target can be any of these:
@@ -105,6 +108,8 @@ A target can be any of these:
 - a DOM element, or anything with `getBoundingClientRect()` returning viewport pixels;
 - a box in container pixels, either `{left, top, width, height}` or `{x, y, width, height}`;
 - a function that returns such a box (or `null`) every frame.
+
+Selector strings aren't targets: pass `document.querySelector(…)`.
 
 Containers can be scrolled, CSS-transformed (`scale()`, zoom) or inside a shadow root; the styles go into the shadow root.
 

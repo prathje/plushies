@@ -26,7 +26,7 @@ import type {CursorDesign, CursorStatus, CursorView, Design, Motion} from './des
 import {buddyDesign} from './designs/buddy';
 import {islandDesign} from './designs/island';
 import {liveDesign} from './designs/live';
-import {el, inks, injectStyle, reducedMotion, styleRootOf, toHex, type StyleRoot} from './dom';
+import {el, inks, injectStyle, injectStyles, reducedMotion, styleRootOf, toHex, type StyleRoot} from './dom';
 
 export type {CursorDesign, CursorStatus} from './design';
 export {fromCanvas, paintHighlight, type CanvasBox, type PaintHighlightOptions} from './canvas';
@@ -50,7 +50,8 @@ type AnyBox = Box | {x: number; y: number; width: number; height: number};
 /**
  * Something to point at, followed as it moves: an element (or anything with
  * `getBoundingClientRect`, in viewport pixels), a box in container pixels, or
- * a function returning one every frame.
+ * a function returning one every frame. Not a selector string. A function
+ * that throws counts as the target going away.
  */
 export type Target = Element | VirtualElement | AnyBox | (() => AnyBox | null);
 
@@ -110,11 +111,13 @@ export interface PlushieCursor {
   /**
    * Glide to a corner of `target` that leaves room for the label, and stay
    * on it while it moves (until `release`, another move, or it goes away).
+   * Null (or not a target) lets go of the current one, stays put and
+   * resolves 'lost'.
    */
   pointAt(target: Target | null | undefined): Promise<MoveResult>;
   /** Stop following the pointed-at target (stay where it is). */
   release(): void;
-  /** What it's working on (a string, or details); null or '' clears it. */
+  /** What it's working on (a string, or details); null or '' clears it. Either ends a `done` message still showing. */
   status(status: string | CursorStatus | null): void;
   /** Update only the progress (0..1, null for none); starts a "Working…" status if there is none. */
   progress(value: number | null, step?: [number, number]): void;
@@ -143,6 +146,7 @@ export interface PlushieCursor {
   setLook(look: CursorLook): void;
   /** Show or drop the plushie (the pointer and label stay). */
   setPlushie(on: boolean): void;
+  /** Hide or show it; hidden, it stops animating. */
   show(on: boolean): void;
   /** Remove the cursor and its highlights. Pending moves resolve 'disposed'; later calls do nothing. */
   dispose(): void;
@@ -209,35 +213,81 @@ interface Layer {
   element: HTMLElement;
   container: HTMLElement;
   styles: StyleRoot;
-  users: number;
+  cursors: Set<CursorState>;
   /** The container's inline position before the layer made it a containing block. */
   position: string | null;
+  /** Styles and position are set up (once the container is in a document). */
+  ready: boolean;
+  /** The container is (near) the viewport: off-screen cursors stop bobbing and marks stop following. */
+  visible: boolean;
+  observers: {disconnect(): void}[];
 }
 
 const layers = new WeakMap<HTMLElement, Layer>();
 
-function joinLayer(container: HTMLElement, zIndex?: number): Layer {
+function joinLayer(container: HTMLElement, cursor: CursorState, zIndex?: number): Layer {
   let layer = layers.get(container);
-  if (!layer || !layer.element.isConnected) {
-    const styles = styleRootOf(container);
-    injectStyle('layer', LAYER_CSS, styles);
-    let position: string | null = null;
-    if (container !== document.body && getComputedStyle(container).position === 'static') {
-      position = container.style.position;
-      container.style.position = 'relative';
-    }
+  if (!layer) {
     const element = el('div', 'pc-layer', container);
-    layer = {element, container, styles, users: 0, position};
-    layers.set(container, layer);
+    const made: Layer = {element, container, styles: document, cursors: new Set(), position: null, ready: false, visible: true, observers: []};
+    // Layout changes that aren't window resizes or scrolls (a sidebar
+    // toggling, the container resizing) and coming into view wake its cursors.
+    const wakeLayer = () => {
+      made.cursors.forEach(wake);
+      if (made.visible && marks.size) schedule();
+    };
+    if (typeof ResizeObserver !== 'undefined') {
+      const resize = new ResizeObserver(wakeLayer);
+      resize.observe(container);
+      made.observers.push(resize);
+    }
+    const page = container === document.body || container === document.documentElement;
+    if (!page && typeof IntersectionObserver !== 'undefined') {
+      const view = new IntersectionObserver(
+        entries => {
+          made.visible = entries[entries.length - 1].isIntersecting;
+          wakeLayer();
+        },
+        {rootMargin: '100px'},
+      );
+      view.observe(container);
+      made.observers.push(view);
+    }
+    layers.set(container, (layer = made));
+  } else if (layer.element.parentNode !== container) {
+    // The container's content was replaced (innerHTML): put the layer back.
+    container.append(layer.element);
   }
-  layer.users++;
+  layer.cursors.add(cursor);
+  setUp(layer);
   if (zIndex !== undefined) layer.element.style.zIndex = String(zIndex);
   return layer;
 }
 
-function leaveLayer(layer: Layer) {
-  if (--layer.users > 0) return;
+/**
+ * Styles into the container's root and the container made a containing
+ * block, as soon as it is in a document (a container still being built
+ * has no root or computed position yet).
+ */
+function setUp(layer: Layer) {
+  if (layer.ready || !layer.container.isConnected) return;
+  layer.ready = true;
+  const {container} = layer;
+  layer.styles = styleRootOf(container);
+  injectStyle('layer', LAYER_CSS, layer.styles);
+  // Designs mounted before the container was attached went to the page.
+  injectStyles(layer.styles);
+  if (container !== document.body && getComputedStyle(container).position === 'static') {
+    layer.position = container.style.position;
+    container.style.position = 'relative';
+  }
+}
+
+function leaveLayer(layer: Layer, cursor: CursorState) {
+  layer.cursors.delete(cursor);
+  if (layer.cursors.size) return;
   layer.element.remove();
+  layer.observers.forEach(o => o.disconnect());
   if (layer.position !== null) layer.container.style.position = layer.position;
   if (layers.get(layer.container) === layer) layers.delete(layer.container);
 }
@@ -263,6 +313,7 @@ interface Bounds {
 }
 
 function frameOf(layer: Layer): Frame {
+  setUp(layer);
   const origin = layer.element.getBoundingClientRect();
   const sx = (layer.element.offsetWidth && origin.width / layer.element.offsetWidth) || 1;
   const sy = (layer.element.offsetHeight && origin.height / layer.element.offsetHeight) || 1;
@@ -291,9 +342,20 @@ function warnOnce(message: string) {
   console.warn(`plushie-cursors: ${message}`);
 }
 
+/** Whether `target` is something `pointAt`/`highlight` can follow (its box is checked each frame). */
+function isTarget(target: unknown): target is Target {
+  return typeof target === 'function' || (typeof target === 'object' && target !== null);
+}
+
+const describe = (v: unknown) => (typeof v === 'string' ? JSON.stringify(v) : typeof v);
+
 /** A box in either shape, or null if it isn't a usable one. */
 function asBox(b: AnyBox | null | undefined): Box | null {
   if (!b) return null;
+  if (typeof b !== 'object') {
+    warnOnce(`ignoring a target that isn't a box: ${describe(b)}`);
+    return null;
+  }
   const box = 'left' in b ? b : {left: b.x, top: b.y, width: b.width, height: b.height};
   if (!finite(box.left, box.top, box.width, box.height)) {
     warnOnce(`ignoring a box that isn't numbers: ${JSON.stringify(b)}`);
@@ -304,9 +366,10 @@ function asBox(b: AnyBox | null | undefined): Box | null {
 
 function resolveBox(target: Target, frame: Frame): Box | null {
   if (typeof target === 'function') return asBox(target());
-  if ('getBoundingClientRect' in target) {
+  if (!isTarget(target)) return null;
+  if (typeof (target as VirtualElement).getBoundingClientRect === 'function') {
     if (target instanceof Element && !target.isConnected) return null;
-    const r = target.getBoundingClientRect();
+    const r = (target as VirtualElement).getBoundingClientRect();
     if (!r || !finite(r.left, r.top, r.width, r.height)) return null;
     return {
       left: (r.left - frame.left) / frame.sx,
@@ -315,7 +378,7 @@ function resolveBox(target: Target, frame: Frame): Box | null {
       height: r.height / frame.sy,
     };
   }
-  return asBox(target);
+  return asBox(target as AnyBox);
 }
 
 // ---------------------------------------------------------------------------
@@ -402,23 +465,37 @@ export function place(
 
 // ---------------------------------------------------------------------------
 // One ticker for every cursor and highlight: it reads every layout first,
-// then writes, and sleeps once everything has settled.
+// then writes, and sleeps once everything has settled. Bobbing designs and
+// held targets keep it going, but only while their container is in view
+// and the cursor shown (browsers pause it in background tabs).
 
 const all = new Set<CursorState>();
 const awake = new Set<CursorState>();
 const marks = new Set<Mark>();
 let raf = 0;
 let last = 0;
+/** Run one cursor's or mark's part of a frame; a throw there mustn't stop the others (or the ticker). */
+function guard(run: () => void) {
+  try {
+    run();
+  } catch (error) {
+    warnOnce(`a cursor update failed: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+/** Marks whose container is off-screen stop following until it scrolls back. */
+const shownMarks = () => [...marks].filter(mark => mark.layer.visible);
 function tick(now: number) {
+  raf = 0;
   const dt = Math.min(0.064, (now - last) / 1000 || 0.016);
   last = now;
   const cursors = [...awake];
-  for (const cursor of cursors) cursor.measure();
-  for (const mark of marks) mark.measure();
-  for (const cursor of cursors) cursor.step(dt, now);
-  for (const mark of marks) mark.apply();
-  for (const cursor of cursors) if (cursor.resting()) awake.delete(cursor);
-  raf = awake.size || marks.size ? requestAnimationFrame(tick) : 0;
+  const shown = shownMarks();
+  for (const cursor of cursors) guard(() => cursor.measure());
+  for (const mark of shown) guard(() => mark.measure());
+  for (const cursor of cursors) guard(() => cursor.step(dt, now));
+  for (const mark of shown) guard(() => mark.apply());
+  for (const cursor of cursors) guard(() => cursor.resting() && awake.delete(cursor));
+  if (!raf && (awake.size || shownMarks().length)) raf = requestAnimationFrame(tick);
 }
 function schedule() {
   if (raf) return;
@@ -464,6 +541,9 @@ function spring(s: Spring, tx: number, ty: number, omega: number, zeta: number, 
   }
 }
 
+/** The longest label morph in the designs (ms), plus a frame or two. */
+const MORPH_MS = 520;
+
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 
 /** A highlight: an overlay following its target, updated by the ticker. */
@@ -474,7 +554,7 @@ class Mark {
   cleared = false;
 
   constructor(
-    private layer: Layer,
+    readonly layer: Layer,
     public target: Target,
     color: string,
   ) {
@@ -489,7 +569,12 @@ class Mark {
   }
 
   measure() {
-    this.box = this.layer.element.isConnected ? resolveBox(this.target, frameOf(this.layer)) : null;
+    try {
+      this.box = this.layer.element.isConnected ? resolveBox(this.target, frameOf(this.layer)) : null;
+    } catch (error) {
+      warnOnce(`a highlight's target threw, hiding it: ${error instanceof Error ? error.message : String(error)}`);
+      this.box = null;
+    }
   }
 
   apply() {
@@ -523,7 +608,6 @@ class CursorState {
   viewer: PlushieViewer | null = null;
   disposed = false;
   private layer: Layer;
-  private styles: StyleRoot;
   /** The point the pointer eases toward (it chases `goal`, so moves start gently). */
   private aim: Spring;
   private tip: Spring;
@@ -547,13 +631,15 @@ class CursorState {
   private announcer: HTMLElement;
   private color = '';
   private colorFromLook = false;
+  private hidden = false;
+  /** Keep ticking until then (ms): a label's size morph is still running, and placement must see where it ends. */
+  private until = 0;
 
   constructor(
     private three: ThreeModule | null,
     private options: PlushieCursorOptions,
   ) {
-    this.layer = joinLayer(options.container ?? document.body, options.zIndex);
-    this.styles = this.layer.styles;
+    this.layer = joinLayer(options.container ?? document.body, this, options.zIndex);
     const {bounds} = frameOf(this.layer);
     const x = finite(options.x) ? options.x! : (bounds.left + bounds.right) / 2;
     const y = finite(options.y) ? options.y! : (bounds.top + bounds.bottom) / 2;
@@ -599,7 +685,7 @@ class CursorState {
     this.viewer?.dispose();
     this.viewer = null;
     this.design?.dispose();
-    this.design = DESIGNS[kind](this.styles);
+    this.design = DESIGNS[kind](this.layer.styles);
     this.element.dataset.design = kind;
     this.element.append(this.design.root);
     this.body = null;
@@ -674,6 +760,9 @@ class CursorState {
     const message = this.view.said ?? this.view.done ?? this.view.status?.text ?? '';
     const text = message ? `${this.view.name}: ${message}` : '';
     if (this.announcer.textContent !== text) this.announcer.textContent = text;
+    // The label morphs to its new size (≤ .46 s): stay awake to keep it on screen.
+    this.until = performance.now() + MORPH_MS;
+    wake(this);
   }
 
   /** Bring this cursor above the others in its layer. */
@@ -685,7 +774,13 @@ class CursorState {
   measure() {
     if (this.disposed) return;
     this.frame = frameOf(this.layer);
-    this.targetBox = this.target ? resolveBox(this.target, this.frame) : null;
+    try {
+      this.targetBox = this.target ? resolveBox(this.target, this.frame) : null;
+    } catch (error) {
+      // A target that throws is as good as gone (step lets go of it).
+      warnOnce(`a target threw, letting go of it: ${error instanceof Error ? error.message : String(error)}`);
+      this.targetBox = null;
+    }
     this.room = this.design.room(this.bare);
   }
 
@@ -754,8 +849,13 @@ class CursorState {
   /** Nothing left to animate: the ticker can stop calling this cursor until something changes. */
   resting() {
     if (this.disposed) return true;
-    if (this.target || this.move || this.motion.bob) return false;
-    if (this.viewer && this.view.status && this.view.status.busy !== false) return false;
+    if (this.move || performance.now() < this.until) return false;
+    // Bobbing, a busy plushie's wobble and following a target only while it
+    // can be seen; showing it again or scrolling it into view wakes it.
+    if (!this.hidden && this.layer.visible) {
+      if (this.target || this.motion.bob) return false;
+      if (this.viewer && this.view.status && this.view.status.busy !== false) return false;
+    }
     const body = this.body;
     return this.settled() && Math.hypot(this.aim.vx, this.aim.vy) < 1 && (!body || Math.hypot(body.vx, body.vy) < 1);
   }
@@ -818,7 +918,15 @@ class CursorState {
 
   pointAt(target: Target | null | undefined): Promise<MoveResult> {
     if (this.disposed) return Promise.resolve('disposed');
-    if (!target) return Promise.resolve('lost');
+    if (!isTarget(target)) {
+      if (target != null) warnOnce(`pointAt takes an element, a box or a function, not ${describe(target)} (use querySelector for selectors)`);
+      // Nothing to point at: let go of the old target and stay put.
+      this.finish('superseded');
+      this.target = null;
+      this.goal = {x: this.tip.x, y: this.tip.y};
+      wake(this);
+      return Promise.resolve('lost');
+    }
     this.target = target;
     return this.start();
   }
@@ -837,13 +945,11 @@ class CursorState {
     }
     if (next && next.progress != null && !finite(next.progress)) next = {...next, progress: null};
     this.view.status = next;
-    if (next) {
-      this.view.done = null;
-      clearTimeout(this.doneTimer);
-      this.raise();
-    }
+    // A new status (or clearing it) ends a finished message still showing.
+    this.view.done = null;
+    clearTimeout(this.doneTimer);
+    if (next) this.raise();
     this.render();
-    wake(this);
   }
 
   progress(value: number | null, step?: [number, number]) {
@@ -969,6 +1075,12 @@ class CursorState {
     };
   }
 
+  show(on: boolean) {
+    this.hidden = !on;
+    this.element.classList.toggle('pc-hidden', !on);
+    wake(this);
+  }
+
   setName(name: string) {
     if (this.disposed) return;
     this.view.name = name;
@@ -991,7 +1103,7 @@ class CursorState {
     this.viewer = null;
     this.design.dispose();
     this.element.remove();
-    leaveLayer(this.layer);
+    leaveLayer(this.layer, this);
   }
 }
 
@@ -1026,7 +1138,7 @@ export function createPlushieCursor(three: ThreeModule | null, options: PlushieC
     setColor: color => unlessDisposed(() => state.setColor(color)),
     setLook: look => unlessDisposed(() => state.setLook(look)),
     setPlushie: on => unlessDisposed(() => state.setPlushie(on)),
-    show: on => unlessDisposed(() => state.element.classList.toggle('pc-hidden', !on)),
+    show: on => unlessDisposed(() => state.show(on)),
     dispose: () => state.dispose(),
   };
 }
