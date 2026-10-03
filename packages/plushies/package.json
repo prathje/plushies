@@ -1,6 +1,6 @@
 {
   "name": "plushies",
-  "version": "0.1.0",
+  "version": "0.1.0-alpha.0",
   "description": "Soft 3D plush characters for three.js — 17 silhouettes, shell-textured fur, floating eyes, glasses and hats, squash & stretch.",
   "license": "MIT",
   "author": "Patrick Rathje",
