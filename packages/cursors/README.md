@@ -140,4 +140,4 @@ bun run build      # dist/index.js and types
 
 The demo is a mock video editor: an HTML slide plus a timeline drawn on a canvas. Three helpers take turns working on both. The playground lets you take over one helper, and "Pip follows me" makes Pip trail your mouse.
 
-`plushies` is linked from the sibling repo (`file:../plushies`); switch it to a version range once plushies is published.
+This package lives in the `plushies` monorepo; run `bun install` at the repo root and the commands above in `packages/cursors`. `plushies` is a workspace dependency (`workspace:*`), which `bun publish` replaces with its version.

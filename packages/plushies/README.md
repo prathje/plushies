@@ -8,7 +8,7 @@ body as separate pieces. Everything that
 moves — eye direction, blink, squash & stretch, hop, lean, turn — is a plain
 number you can set every frame.
 
-**Demo and editor:** run `bun install && bun run site:dev` and open
+**Demo and editor:** run `bun install` at the repo root, then `bun run site:dev` in `packages/plushies`, and open
 <http://localhost:4517> — configure a plushie and copy the code.
 
 ## Install
@@ -163,8 +163,9 @@ small plushies are cheap. A handful of hero-size plushies is fine on any GPU.
 
 ## Development
 
+This package lives in the `plushies` monorepo next to [`plushie-cursors`](../cursors). Run `bun install` once at the repo root; the commands below run in `packages/plushies`.
+
 ```sh
-bun install
 bun run typecheck   # tsc over src, tests and site
 bun run test        # unit tests (bun:test, headless three)
 bun run build       # dist/: ESM + CJS (three external), bundled ESM + global (three included), d.ts
@@ -174,7 +175,7 @@ bun run test:e2e    # Playwright: the three builds and the site in Chromium (nee
 bun run check       # typecheck + test + build + site:build
 ```
 
-CI (`.github/workflows/ci.yml`) runs all of the above on every push and pull
+CI (`.github/workflows/ci.yml` at the repo root) runs all of the above for both packages on every push and pull
 request and deploys `_site/` to GitHub Pages from `main` (Settings → Pages →
 Source: GitHub Actions).
 
@@ -185,10 +186,10 @@ first, then serve the repo root).
 
 This is the same code that renders the `Plushie` / `PlushLibrary` components in
 VideoZero. PlushLibrary loads the CommonJS core at runtime; refresh the engine's
-copy with
+copy from the repo root (with the engine checked out next to this repo) with
 
 ```sh
-bun run build --vendor ../engine/assets/vendor/plushies.js
+bun run vendor
 ```
 
 (restart the engine after adding the file for the first time).

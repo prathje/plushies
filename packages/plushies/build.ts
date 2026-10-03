@@ -11,7 +11,7 @@
  *   bun run build --vendor <file>        # also copy plushies.cjs to <file>
  *
  * VideoZero's PlushLibrary component loads the CJS core at runtime:
- *   bun run build --vendor ../engine/assets/vendor/plushies.js
+ *   bun run vendor    (at the repo root; = build --vendor ../../../engine/assets/vendor/plushies.js)
  */
 import {$} from 'bun';
 import {copyFile, rm} from 'fs/promises';

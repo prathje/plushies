@@ -24,28 +24,28 @@ jobs:
           bun-version: 1.3.2
       - run: bun install --frozen-lockfile
 
-      - name: Typecheck
+      - name: Typecheck (both packages)
         run: bun run typecheck
-      - name: Unit tests
+      - name: Unit tests (both packages)
         run: bun run test
-      - name: Build the library (three external + three bundled)
+      - name: Build (both packages)
         run: bun run build
       - name: Build the site
-        run: bun run site:build
+        run: bun run --cwd packages/plushies site:build
 
       - name: Install Chromium
         run: bunx playwright install --with-deps chromium
-      - name: Browser tests (builds + site)
+      - name: Browser tests (plushies builds + site, cursors lib + demo)
         run: bun run test:e2e
 
       - uses: actions/upload-artifact@v4
         with:
           name: dist
-          path: dist
+          path: packages/*/dist
       - if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: actions/upload-pages-artifact@v3
         with:
-          path: _site
+          path: packages/plushies/_site
 
   pages:
     name: Deploy GitHub Pages

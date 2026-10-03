@@ -14,16 +14,21 @@
     },
     "./package.json": "./package.json"
   },
-  "files": ["dist", "README.md"],
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "sideEffects": false,
   "scripts": {
     "build": "bun run build.ts",
     "typecheck": "tsc -p tsconfig.json",
     "test": "bun test test",
+    "test:unit": "bun test test/unit.test.ts",
+    "test:browser": "bun test test/lib.test.ts test/site.test.ts",
     "site:dev": "bun --port 4521 site/index.html"
   },
   "dependencies": {
-    "plushies": "file:../plushies"
+    "plushies": "workspace:*"
   },
   "peerDependencies": {
     "three": ">=0.160.0"
@@ -35,5 +40,13 @@
     "three": "^0.186.0",
     "typescript": "^5.9.3"
   },
-  "keywords": ["plushies", "cursor", "presence", "multiplayer", "ai", "agent", "three"]
+  "keywords": [
+    "plushies",
+    "cursor",
+    "presence",
+    "multiplayer",
+    "ai",
+    "agent",
+    "three"
+  ]
 }
