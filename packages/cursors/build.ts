@@ -1,5 +1,5 @@
 /**
- * Build plushie-cursors into dist/: index.js (ESM, `three` and `plushies`
+ * Build @plushies/cursors into dist/: index.js (ESM, `three` and `plushies`
  * external) and its .d.ts types.
  *
  *   bun run build

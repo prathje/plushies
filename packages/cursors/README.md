@@ -1,10 +1,10 @@
-# plushie-cursors
+# @plushies/cursors
 
 Floating [plushies](../plushies) cursors for AI helpers. Each helper is a small plush character that floats along with its own pointer. It shows its name and a status box that changes size to fit what it's working on.
 
 ```ts
 import * as THREE from 'three';
-import {createPlushieCursor} from 'plushie-cursors';
+import {createPlushieCursor} from '@plushies/cursors';
 
 const editor = document.querySelector<HTMLElement>('#editor')!;
 const headline = document.querySelector('#headline')!;
@@ -116,7 +116,7 @@ Containers can be scrolled, CSS-transformed (`scale()`, zoom) or inside a shadow
 For an app that draws on a `<canvas>`:
 
 ```ts
-import {fromCanvas, paintHighlight} from 'plushie-cursors';
+import {fromCanvas, paintHighlight} from '@plushies/cursors';
 
 // Point at a shape drawn at (x, y, w, h) in canvas units, following it as it moves.
 // Pass `size` if your units aren't drawing-buffer pixels, e.g. scene pixels.

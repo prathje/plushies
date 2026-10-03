@@ -1,9 +1,9 @@
 /**
- * plushie-cursors — a plushie that floats along with its own pointer: an AI
+ * @plushies/cursors — a plushie that floats along with its own pointer: an AI
  * helper's presence on a page, with its name and a live status box.
  *
  *   import * as THREE from 'three';
- *   import {createPlushieCursor} from 'plushie-cursors';
+ *   import {createPlushieCursor} from '@plushies/cursors';
  *
  *   const pip = createPlushieCursor(THREE, {name: 'Pip', look: {kind: 'star', color: '#f5c518'}});
  *   await pip.pointAt(document.querySelector('#title'));
@@ -339,7 +339,7 @@ const warned = new Set<string>();
 function warnOnce(message: string) {
   if (warned.has(message)) return;
   warned.add(message);
-  console.warn(`plushie-cursors: ${message}`);
+  console.warn(`@plushies/cursors: ${message}`);
 }
 
 /** Whether `target` is something `pointAt`/`highlight` can follow (its box is checked each frame). */

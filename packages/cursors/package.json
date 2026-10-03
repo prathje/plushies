@@ -1,8 +1,13 @@
 {
-  "name": "plushie-cursors",
+  "name": "@plushies/cursors",
   "version": "0.1.0",
   "description": "Floating plushie cursors for AI helpers: a plush character with its own pointer, name tag and a live status box.",
   "license": "MIT",
+  "author": "Patrick Rathje",
+  "repository": {"type": "git", "url": "git+https://github.com/prathje/plushies.git", "directory": "packages/cursors"},
+  "homepage": "https://github.com/prathje/plushies/tree/main/packages/cursors#readme",
+  "bugs": "https://github.com/prathje/plushies/issues",
+  "publishConfig": {"access": "public"},
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
@@ -16,7 +21,8 @@
   },
   "files": [
     "dist",
-    "README.md"
+    "README.md",
+    "LICENSE"
   ],
   "sideEffects": ["./site/*.ts"],
   "scripts": {
@@ -29,7 +35,7 @@
     "site:build": "bun run site/build.ts"
   },
   "dependencies": {
-    "plushies": "workspace:*"
+    "plushies": "workspace:^"
   },
   "peerDependencies": {
     "three": ">=0.160.0"

@@ -163,7 +163,7 @@ small plushies are cheap. A handful of hero-size plushies is fine on any GPU.
 
 ## Development
 
-This package lives in the `plushies` monorepo next to [`plushie-cursors`](../cursors). Run `bun install` once at the repo root; the commands below run in `packages/plushies`.
+This package lives in the `plushies` monorepo next to [`@plushies/cursors`](../cursors). Run `bun install` once at the repo root; the commands below run in `packages/plushies`.
 
 ```sh
 bun run typecheck   # tsc over src, tests and site

@@ -5,9 +5,9 @@ Soft 3D plush characters for three.js, and what's built on them.
 | package | npm | |
 |---|---|---|
 | [`packages/plushies`](packages/plushies) | `plushies` | The characters: 17 silhouettes, shell-textured fur, eyes, glasses, hats, squash & stretch, and a drop-in viewer. |
-| [`packages/cursors`](packages/cursors) | `plushie-cursors` | Floating cursors for AI helpers: a plushie with its own pointer, name and live status box. |
+| [`packages/cursors`](packages/cursors) | `@plushies/cursors` | Floating cursors for AI helpers: a plushie with its own pointer, name and live status box. |
 
-Both are published separately; `plushie-cursors` depends on `plushies` through the workspace (`workspace:*`).
+Both are published separately; `@plushies/cursors` depends on `plushies` through the workspace (`workspace:^`, published as `^<version>`).
 
 ```sh
 bun install          # once, here at the root
