@@ -19,7 +19,7 @@
       if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
     })();
   </script>
-  <link rel="stylesheet" href="./styles/base.css" />
+  <!-- theme.css imports base.css first: one bundle keeps the cascade order. -->
   <link rel="stylesheet" href="./styles/theme.css" />
 </head>
 <body>

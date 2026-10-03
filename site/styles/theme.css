@@ -1,7 +1,9 @@
 /* Marshmallow — candy-pastel soft UI. Puffy, squeezable controls in a quiet
    oat-milk and lilac chrome, so the plushie is the only thing in full colour. */
 
-{
+@import './base.css';
+
+:root {
   --bg: #f7f2ec;
   --bg-2: #efe8f1;
   --surface: #fffdfb;
