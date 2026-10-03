@@ -1,5 +1,11 @@
+/**
+ * The opener: three plushies at work as AI-helper cursors (@plushies/cursors)
+ * in a mock app. A "Use case" switch picks the app, a "Design" switch the
+ * cursor design, and "Follow me" has one of them trail your pointer around
+ * the whole page.
+ */
 import * as THREE from 'three';
-import {createPlushieCursor, type CursorDesign, type PlushieCursor} from '../src/index';
+import {createPlushieCursor, type CursorDesign, type PlushieCursor} from '@plushies/cursors';
 import {design} from './scenes/design';
 import {doc} from './scenes/doc';
 import {$, pick, rand, sleep, type Scene, type Task, type Worker} from './scenes/kit';
@@ -25,9 +31,9 @@ interface Helper extends Worker {
   color: string;
   mixed: CursorDesign;
   cursor: PlushieCursor;
-  /** Driven by you (playground or "follows me"): its script waits. */
+  /** Driven by you (playground or "follow me"): its script waits. */
   manual: boolean;
-  /** Taken over in the playground (until Resume), whatever "follows me" does. */
+  /** Taken over in the playground (until Resume), whatever "follow me" does. */
   played: boolean;
   /** Whether it floats a plushie (mirrors setPlushie). */
   plushie: boolean;
@@ -42,6 +48,17 @@ const LOOKS = [
   {name: 'Biscuit', color: '#f47c9a', mixed: 'buddy' as const, look: {kind: 'heart', color: '#f47c9a', eyes: 'oval', mouth: 'smile', cheeks: true, glasses: 'round'} as const},
   {name: 'Moss', color: '#6fbf8e', mixed: 'island' as const, look: {kind: 'cloud', color: '#8fd19e', fabric: 'fleece', eyes: 'dot', mouth: 'smile', hat: 'beanie', hatColor: '#1f5f5b'} as const},
 ];
+
+// The cursors live on the page (not in the workspace), so a helper that
+// follows you can leave the mock app and come along to the gallery and the
+// editor. Positions are page pixels; the helpers' own spots are in the
+// workspace's part of the page.
+
+/** A point in the workspace, by fractions of its width and height, in page pixels. */
+function inWorkspace(fx: number, fy: number) {
+  const r = workspace.getBoundingClientRect();
+  return {x: r.left + scrollX + fx * r.width, y: r.top + scrollY + fy * r.height};
+}
 
 const start = [
   [0.18, 0.2],
@@ -61,10 +78,11 @@ const helpers: Helper[] = LOOKS.map((h, i) => ({
     name: h.name,
     look: h.look,
     color: h.color,
-    container: workspace,
+    container: document.body,
+    // Over the page, under the sticky nav.
+    zIndex: 10,
     design: 'live',
-    x: workspace.clientWidth * start[i][0],
-    y: workspace.clientHeight * start[i][1],
+    ...inWorkspace(start[i][0], start[i][1]),
   }),
 }));
 
@@ -83,11 +101,10 @@ async function waitWhileHeld(h: Helper) {
   while (paused || h.manual) await sleep(250);
 }
 
-/** Where the cursor's tip is now, in workspace pixels (its padding box). */
+/** Where the cursor's tip is now, in viewport pixels. */
 function tipOf(h: Helper) {
   const tip = h.cursor.element.getBoundingClientRect();
-  const r = workspace.getBoundingClientRect();
-  return {x: tip.left - r.left - workspace.clientLeft, y: tip.top - r.top - workspace.clientTop};
+  return {x: tip.left, y: tip.top};
 }
 
 /** Give up the task in hand: unclaim it, drop its glow and the script's status. */
@@ -113,7 +130,7 @@ function interrupt(h: Helper, freeze: boolean) {
   h.cursor.release();
   if (freeze) {
     const {x, y} = tipOf(h);
-    void h.cursor.moveTo(x, y);
+    void h.cursor.moveTo(x + scrollX, y + scrollY);
   }
 }
 
@@ -129,14 +146,10 @@ function pickTask(h: Helper): Task | null {
   if (!free.length) return null;
   const others = helpers.filter(o => o !== h);
   const busyOnCanvas = others.some(o => o.job && onCanvas(o.job.task));
-  // Others' spots: what they work on, or where you're driving them.
-  const ws = workspace.getBoundingClientRect();
+  // Others' spots (viewport pixels): what they work on, or where you're driving them.
   const spots = others.flatMap(o => {
     if (o.job) return [centreOf(rectOf(o.job.task))];
-    if (o.manual) {
-      const p = tipOf(o);
-      return [{x: ws.left + workspace.clientLeft + p.x, y: ws.top + workspace.clientTop + p.y}];
-    }
+    if (o.manual) return [tipOf(o)];
     return [];
   });
   // About a status box's width: closer than this and the boxes collide.
@@ -150,6 +163,12 @@ function pickTask(h: Helper): Task | null {
   // Nothing far enough (a narrow screen, everyone busy): wait for a gap
   // rather than pile on top of someone.
   return apart.length ? pick(apart).t : null;
+}
+
+/** Wander to a random spot in the workspace. */
+function wander(h: Helper) {
+  const {x, y} = inWorkspace(rand(0.1, 0.9), rand(0.15, 0.85));
+  return h.cursor.moveTo(x, y);
 }
 
 async function work(h: Helper, check: () => void) {
@@ -195,8 +214,7 @@ async function work(h: Helper, check: () => void) {
   await sleep(rand(900, 1700));
   check();
   if (Math.random() < 0.35) {
-    const r = workspace.getBoundingClientRect();
-    await h.cursor.moveTo(rand(0.1, 0.9) * r.width, rand(0.1, 0.9) * r.height);
+    await wander(h);
     check();
     if (Math.random() < 0.6) h.cursor.say(pick(QUIPS));
     await sleep(rand(700, 1400));
@@ -224,11 +242,53 @@ helpers.forEach((h, i) => void run(h, 600 + i * 900));
 // ---------------------------------------------------------------------------
 // Controls.
 
-/** Remember a choice in the URL, so a reload (or a shared link) comes back to it. */
+/** You drive this helper now: its script stops mid-step and lets go of its task. */
+const takeOver = (h: Helper) => {
+  if (h.manual) return;
+  h.manual = true;
+  interrupt(h, true);
+};
+
+// Follow me: one helper trails your pointer, a little offset so it's beside
+// it rather than on it, anywhere on the page. Scrolling moves it too, so it
+// stays beside the pointer rather than scrolling away with the page.
+let follower: Helper | null = null;
+let pointer: {x: number; y: number} | null = null;
+const trail = () => {
+  if (!follower || !pointer) return;
+  void follower.cursor.moveTo(pointer.x + scrollX + 26, pointer.y + scrollY + 22);
+};
+window.addEventListener(
+  'pointermove',
+  event => {
+    pointer = {x: event.clientX, y: event.clientY};
+    trail();
+  },
+  {passive: true},
+);
+window.addEventListener('scroll', trail, {passive: true});
+
+// The helpers' own spots are in the workspace: when it scrolls out of view
+// they hide (and stop animating); the one following you stays.
+let workspaceInView = true;
+const showHelpers = () => {
+  for (const h of helpers) h.cursor.show(workspaceInView || h === follower);
+};
+new IntersectionObserver(
+  entries => {
+    workspaceInView = entries[entries.length - 1].isIntersecting;
+    showHelpers();
+  },
+  {rootMargin: '160px'},
+).observe(workspace);
+
+/** Remember a choice in the URL (keeping the editor's share params), so a reload or a shared link comes back to it. */
+let ready = false;
 const remember = (key: string, value: string) => {
+  if (!ready) return;
   const params = new URLSearchParams(location.search);
   params.set(key, value);
-  history.replaceState(null, '', `?${params}`);
+  history.replaceState(null, '', `?${params}${location.hash}`);
 };
 
 /** A radiogroup of buttons: one tab stop, arrows move the selection, `attr` names the value. */
@@ -265,33 +325,46 @@ const designs = radiogroup($('#designs'), 'design', design => {
   remember('design', design);
 });
 
-let booted = false;
 // The use case: show its mock app, and the helpers drop what they were doing
 // and scatter into it to pick up its tasks.
 const scenes = radiogroup($('#scenes'), 'scene', id => {
   const next = SCENES.find(s => s.id === id)!;
-  const change = booted && next !== scene;
+  const change = ready && next !== scene;
   scene = next;
-  booted = true;
   for (const s of SCENES) $(`.scene[data-scene="${s.id}"]`).hidden = s !== next;
   workspace.setAttribute('aria-label', next.note);
   $('#scene-note').textContent = next.note;
   remember('scene', id);
   if (!change) return;
-  const r = workspace.getBoundingClientRect();
   for (const h of helpers) {
     if (h.manual) continue;
     interrupt(h, false);
-    void h.cursor.moveTo(rand(0.1, 0.9) * r.width, rand(0.15, 0.85) * r.height);
+    void wander(h);
   }
 });
 
-// Start where the URL says (remembering only when it did), else live + video.
+// Follow me: the chosen helper comes along; the one before goes back to its
+// script (unless the playground has it).
+const follows = radiogroup($('#follow'), 'follow', name => {
+  const next = helpers.find(h => h.name === name) ?? null;
+  if (next === follower) return;
+  const before = follower;
+  follower = next;
+  if (before && !before.played) before.manual = false;
+  if (next) {
+    takeOver(next);
+    next.cursor.say(pick(['Right behind you!', 'Lead the way!', 'Where to?']));
+    trail();
+  }
+  showHelpers();
+});
+
+// Start where the URL says, else live + video; only picks made here go into the URL.
 const initialDesign = params.get('design');
 const initialScene = params.get('scene');
 designs.select(designs.has(initialDesign) ? initialDesign! : 'live');
 scenes.select(scenes.has(initialScene) ? initialScene! : SCENES[0].id);
-if (!initialDesign && !initialScene) history.replaceState(null, '', location.pathname);
+ready = true;
 
 // Pause stops the scripts mid-step: the cursors stop where they are and drop
 // what they were doing (a "done" message too). Play lets each script pick a
@@ -300,15 +373,9 @@ const pauseButton = $('#pause');
 pauseButton.addEventListener('click', () => {
   paused = !paused;
   pauseButton.setAttribute('aria-pressed', String(paused));
+  pauseButton.textContent = paused ? 'Play' : 'Pause';
   if (paused) for (const h of helpers) if (!h.manual) interrupt(h, true);
 });
-
-/** You drive this helper now: its script stops mid-step and lets go of its task. */
-const takeOver = (h: Helper) => {
-  if (h.manual) return;
-  h.manual = true;
-  interrupt(h, true);
-};
 
 // Plushies are optional, per cursor. The global box is on when all are,
 // mixed (indeterminate) when only some are; the playground's box shows the
@@ -332,24 +399,6 @@ plushies.addEventListener('change', () => {
   syncPlushieBoxes();
 });
 
-// Pip follows the mouse: offset a little, so it's beside your pointer rather than on it.
-const follow = $<HTMLInputElement>('#follow');
-const onMove = (event: PointerEvent) => {
-  const r = workspace.getBoundingClientRect();
-  void helpers[0].cursor.moveTo(event.clientX - r.left + 26, event.clientY - r.top + 22);
-};
-follow.addEventListener('change', () => {
-  if (follow.checked) {
-    takeOver(helpers[0]);
-    helpers[0].cursor.status(null);
-    workspace.addEventListener('pointermove', onMove);
-  } else {
-    workspace.removeEventListener('pointermove', onMove);
-    // Back to its script, unless the playground has it.
-    if (!helpers[0].played) helpers[0].manual = false;
-  }
-});
-
 // Playground.
 helpers.forEach((h, i) => who.add(new Option(h.name, String(i))));
 who.addEventListener('change', syncPlushieBoxes);
@@ -364,8 +413,14 @@ const held = () => {
   return h.cursor;
 };
 const progress = $<HTMLInputElement>('#progress');
-progress.addEventListener('input', () => {
+// The site's range tracks fill up to --p.
+const showProgress = () => {
+  progress.style.setProperty('--p', `${progress.value}%`);
   $('#pv').textContent = `${progress.value}%`;
+};
+showProgress();
+progress.addEventListener('input', () => {
+  showProgress();
   held().progress(Number(progress.value) / 100);
 });
 $('#b-status').addEventListener('click', () =>
@@ -378,9 +433,8 @@ $('#b-done').addEventListener('click', () => void held().done('All done'));
 $('#b-resume').addEventListener('click', () => {
   for (const h of helpers) {
     h.played = false;
-    if (h === helpers[0] && follow.checked) continue;
-    h.manual = false;
+    if (h !== follower) h.manual = false;
   }
 });
 
-Object.assign(window, {helpers, scenes: SCENES});
+Object.assign(window, {helpers, scenes: SCENES, follows});

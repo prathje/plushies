@@ -1,6 +1,11 @@
-/** The GitHub Pages site: renders, the editor drives the plushie and the code, links round-trip. Needs `bun run site:build` at the repo root (it adds the cursor demo). */
+/**
+ * The GitHub Pages site: the cursor demo opens it (three helpers at work in six
+ * kinds of app, a design switch, one helper following you), then the gallery,
+ * the editor (it drives the plushie and the code, links round-trip) and the
+ * docs. Needs `bun run site:build`.
+ */
 import {afterAll, beforeAll, expect, test} from 'bun:test';
-import {drawnBytes, launch} from './browser';
+import {launch} from './browser';
 
 let browser: Awaited<ReturnType<typeof launch>>;
 beforeAll(async () => {
@@ -10,11 +15,19 @@ afterAll(() => browser?.close());
 
 const code = (page: import('playwright').Page) => page.locator('#code-out').textContent();
 
-test('renders the hero, gallery and editor without errors', async () => {
+const helpersMounted = (page: import('playwright').Page) =>
+  page.waitForFunction(() => document.querySelectorAll('.pc-cursor canvas').length === 3, null, {timeout: 60_000});
+/** Someone is busy: a status box is open and something glows. */
+const helpersAtWork = (page: import('playwright').Page) =>
+  page.waitForFunction(() => !!document.querySelector('.pc-mark') && !!document.querySelector('.is-open'), null, {timeout: 30_000});
+
+test('renders the helpers, gallery and editor without errors', async () => {
   const {page, errors} = await browser.page('/_site/');
-  await page.waitForSelector('#hero-plush canvas', {timeout: 20_000});
+  await helpersMounted(page);
   await page.waitForTimeout(800);
-  expect(await drawnBytes(page, '#hero-plush canvas')).toBeGreaterThan(20_000);
+  // Each cursor floats a plushie of a real size (no pixel check: the cursors bob and glide, so a screenshot of one never holds still).
+  const box = (await page.locator('.pc-cursor canvas').first().boundingBox())!;
+  expect(box.width).toBeGreaterThan(20);
   expect(await page.locator('.look').count()).toBe(9);
   expect(await page.locator('#controls .group').count()).toBe(6);
   expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBe(0);
@@ -70,13 +83,14 @@ test('gallery cards open in the editor', async () => {
 
 test('phone layout has no sideways scroll', async () => {
   const {page, errors} = await browser.page('/_site/', {width: 390, height: 844});
-  await page.waitForSelector('#hero-plush canvas', {timeout: 20_000});
+  await helpersMounted(page);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBe(0);
   for (const id of ['gallery', 'editor', 'docs']) {
     await page.evaluate(id => document.getElementById(id)!.scrollIntoView(), id);
     await page.waitForTimeout(300);
     expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBe(0);
   }
-  // The nav (Editor, Cursors, GitHub on CI) leaves the theme button on screen.
+  // The nav (Cursors, Editor, GitHub on CI) leaves the theme button on screen.
   const button = (await page.locator('.theme-btn').boundingBox())!;
   expect(button.x + button.width).toBeLessThanOrEqual(390);
   await page.locator('.theme-btn').click();
@@ -85,15 +99,114 @@ test('phone layout has no sideways scroll', async () => {
   await page.close();
 }, 180_000);
 
-test('the nav leads to the cursor demo, which keeps the theme and links back', async () => {
-  // Built into _site/cursors/ by the repo root's `bun run site:build`.
-  const {page, errors} = await browser.page('/_site/');
-  await page.evaluate(() => localStorage.setItem('plushies-theme', 'dark'));
-  await page.locator('.nav-links a', {hasText: 'Cursors'}).click();
-  await page.waitForURL(/\/_site\/cursors\/$/);
-  await page.waitForFunction(() => document.querySelectorAll('.pc-cursor').length === 3, null, {timeout: 60_000});
-  expect(await page.evaluate(() => document.documentElement.dataset.theme)).toBe('dark');
-  expect(await page.locator('a.brand').evaluate(a => (a as HTMLAnchorElement).href)).toBe(browser.url('/_site/'));
+// --- The cursor demo -----------------------------------------------------------
+
+for (const design of ['live', 'buddy', 'island', 'mixed']) {
+  test(`${design}: the helpers mount and get to work`, async () => {
+    const {page, errors} = await browser.page(`/_site/?design=${design}`, {width: 1300, height: 900});
+    await helpersMounted(page);
+    const designs = await page.$$eval('.pc-cursor', els => els.map(e => (e as HTMLElement).dataset.design));
+    expect(designs).toEqual(design === 'mixed' ? ['live', 'buddy', 'island'] : [design, design, design]);
+    await helpersAtWork(page);
+    expect(errors()).toEqual([]);
+    await page.close();
+  }, 180_000);
+}
+
+for (const scene of ['design', 'website', 'sheet', 'doc', 'pipeline']) {
+  test(`${scene}: the helpers work in this use case`, async () => {
+    const {page, errors} = await browser.page(`/_site/?scene=${scene}`, {width: 1300, height: 900});
+    await helpersMounted(page);
+    // Only this use case's app shows, and the button says so.
+    expect(await page.$$eval('.scene:not([hidden])', els => els.map(e => (e as HTMLElement).dataset.scene))).toEqual([scene]);
+    expect(await page.getAttribute(`#scenes [data-scene=${scene}]`, 'aria-checked')).toBe('true');
+    await helpersAtWork(page);
+    expect(errors()).toEqual([]);
+    await page.close();
+  }, 180_000);
+}
+
+test('switching the design and the use case keeps the helpers', async () => {
+  const {page, errors} = await browser.page('/_site/?kind=ghost&hat=crown#cursors', {width: 1300, height: 900});
+  await helpersMounted(page);
+  await page.waitForFunction(() => !!document.querySelector('.pc-mark'), null, {timeout: 30_000});
+  await page.click('#designs [data-design=island]');
+  await page.waitForFunction(() => document.querySelectorAll('.pc-island .pc-seat canvas').length === 3, null, {timeout: 30_000});
+  await page.click('#scenes [data-scene=sheet]');
+  // The old app's glows go (after their fade); the helpers stay, in their design, and get to work on the new one.
+  await page.waitForFunction(() => !document.querySelector('.pc-mark'), null, {timeout: 5_000});
+  expect(await page.$$eval('.scene:not([hidden])', els => els.map(e => (e as HTMLElement).dataset.scene))).toEqual(['sheet']);
+  // Remembered in the URL, next to the editor's share params.
+  expect(await page.evaluate(() => location.search + location.hash)).toBe('?kind=ghost&hat=crown&design=island&scene=sheet#cursors');
+  expect(await page.$$eval('.pc-cursor', els => els.map(e => (e as HTMLElement).dataset.design))).toEqual(['island', 'island', 'island']);
+  await page.waitForFunction(() => !!document.querySelector('.pc-mark'), null, {timeout: 30_000});
+  expect(await page.$$eval('.pc-cursor canvas', els => els.length)).toBe(3);
+  // The editor still got its share params.
+  expect(await page.locator('.shape-tile[title="ghost"]').getAttribute('aria-checked')).toBe('true');
+  expect(errors()).toEqual([]);
+  await page.close();
+}, 180_000);
+
+test('plushies are optional, per cursor', async () => {
+  const {page, errors} = await browser.page('/_site/?design=live', {width: 1300, height: 900});
+  await helpersMounted(page);
+  await page.locator('.toggle:has(#plushies)').click();
+  await page.waitForFunction(() => document.querySelectorAll('.pc-cursor canvas').length === 0, null, {timeout: 10_000});
+  expect(await page.$$eval('.pc-cursor.pc-bare', els => els.length)).toBe(3);
+  await page.locator('.toggle:has(#plushies)').click();
+  await helpersMounted(page);
+  // Just one, from the playground.
+  await page.selectOption('#who', '1');
+  await page.locator('.toggle:has(#own-plushie)').click();
+  await page.waitForFunction(() => document.querySelectorAll('.pc-cursor canvas').length === 2, null, {timeout: 10_000});
+  expect(await page.$$eval('.pc-cursor.pc-bare', els => els.map(e => (e as HTMLElement).dataset.cursor))).toEqual(['Biscuit']);
+  expect(errors()).toEqual([]);
+  await page.close();
+}, 180_000);
+
+test('one helper follows the pointer around the page', async () => {
+  const {page, errors} = await browser.page('/_site/?design=live', {width: 1300, height: 900});
+  await helpersMounted(page);
+  const tip = (name: string) =>
+    page.evaluate(name => {
+      const c = document.querySelector<HTMLElement>(`.pc-cursor[data-cursor="${name}"]`)!;
+      const r = c.getBoundingClientRect();
+      return {x: Math.round(r.left), y: Math.round(r.top), hidden: c.classList.contains('pc-hidden')};
+    }, name);
+  // Settled beside the pointer (a small offset, so it isn't on it).
+  const beside = async (name: string, x: number, y: number) => {
+    await page.waitForFunction(
+      ([name, x, y]) => {
+        const r = document.querySelector<HTMLElement>(`.pc-cursor[data-cursor="${name}"]`)!.getBoundingClientRect();
+        return Math.abs(r.left - (x + 26)) < 2 && Math.abs(r.top - (y + 22)) < 2;
+      },
+      [name, x, y] as const,
+      {timeout: 30_000},
+    );
+  };
+  await page.click('#follow [data-follow=Biscuit]');
+  await page.mouse.move(600, 500);
+  await beside('Biscuit', 600, 500);
+  // Down to the editor: Biscuit comes along, the others hide with their workspace.
+  await page.evaluate(() => {
+    document.documentElement.style.scrollBehavior = 'auto';
+    document.getElementById('editor')!.scrollIntoView();
+  });
+  await page.mouse.move(700, 400);
+  await page.mouse.move(720, 420);
+  await beside('Biscuit', 720, 420);
+  expect((await tip('Pip')).hidden).toBe(true);
+  expect((await tip('Biscuit')).hidden).toBe(false);
+  // Scrolling alone keeps it beside the pointer.
+  await page.mouse.wheel(0, -200);
+  await beside('Biscuit', 720, 420);
+  // Another follower: Biscuit goes back to its script.
+  await page.click('#follow [data-follow=Moss]', {force: true});
+  await page.mouse.move(640, 460);
+  await beside('Moss', 640, 460);
+  expect(await page.evaluate(() => (window as any).helpers.map((h: any) => h.manual))).toEqual([false, false, true]);
+  await page.click('#follow [data-follow=""]', {force: true});
+  expect(await page.evaluate(() => (window as any).helpers.map((h: any) => h.manual))).toEqual([false, false, false]);
   expect(errors()).toEqual([]);
   await page.close();
 }, 180_000);

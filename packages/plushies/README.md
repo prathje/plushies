@@ -9,7 +9,7 @@ moves — eye direction, blink, squash & stretch, hop, lean, turn — is a plain
 number you can set every frame.
 
 **Demo and editor:** run `bun install` at the repo root, then `bun run site:dev` in `packages/plushies`, and open
-<http://localhost:4517> — configure a plushie and copy the code.
+<http://localhost:4517>. The page opens with the [cursor demo](../cursors) (three plushie helpers at work) and goes on to the gallery and the workbench: configure a plushie and copy the code.
 
 ## Install
 
@@ -169,9 +169,9 @@ This package lives in the `plushies` monorepo next to [`@plushies/cursors`](../c
 bun run typecheck   # tsc over src, tests and site
 bun run test        # unit tests (bun:test, headless three)
 bun run build       # dist/: ESM + CJS (three external), bundled ESM + global (three included), d.ts
-bun run site:dev    # the demo/editor site with live reload on http://localhost:4517
-bun run site:build  # _site/ (the repo root's site:build also adds the cursor demo at _site/cursors/)
-bun run test:e2e    # Playwright: the three builds and the site in Chromium (needs build + the root's site:build)
+bun run site:dev    # the site (cursor demo, gallery, workbench, docs) with live reload on http://localhost:4517
+bun run site:build  # _site/ (the cursor demo is part of the page: site/helpers.ts and site/scenes/)
+bun run test:e2e    # Playwright: the three builds and the site in Chromium (needs build + site:build)
 bun run check       # typecheck + test + build + site:build
 ```
 
@@ -182,11 +182,12 @@ Source: GitHub Actions).
 `examples/index.html` is a minimal page using the ESM build (`bun run build`
 first, then serve the repo root).
 
-### VideoZero
+### Vendoring into the engine
 
-This is the same code that renders the `Plushie` / `PlushLibrary` components in
-VideoZero. PlushLibrary loads the CommonJS core at runtime; refresh the engine's
-copy from the repo root (with the engine checked out next to this repo) with
+The engine next to this repo renders its `Plushie` / `PlushLibrary` components
+with this same code. PlushLibrary loads the CommonJS core at runtime; refresh
+the engine's copy from the repo root (with the engine checked out next to this
+repo) with
 
 ```sh
 bun run vendor

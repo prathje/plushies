@@ -2,7 +2,9 @@ import * as THREE from 'three';
 import {mountPlushie, type PlushieViewer} from '../src/viewer';
 import {renderDocs} from './docs';
 import {createEditor} from './editor';
-import {FOOTER_LOOK, GALLERY, HERO_LOOK} from './looks';
+// The opener: plushies at work as AI-helper cursors (runs on import).
+import './helpers';
+import {FOOTER_LOOK, GALLERY} from './looks';
 import {copyText, plushVars, reducedMotion, setupTheme} from './ui';
 
 declare const __REPO__: string | undefined;
@@ -19,12 +21,6 @@ for (const link of document.querySelectorAll<HTMLAnchorElement>('[data-repo]')) 
 for (const button of document.querySelectorAll<HTMLButtonElement>('[data-copy-text]')) {
   button.addEventListener('click', () => copyText(button, button.dataset.copyText!));
 }
-
-// Hero ----------------------------------------------------------------------
-const heroStage = $('.hero-stage');
-const hero = mountPlushie($('#hero-plush'), THREE, {...HERO_LOOK, idle: !calm, followPointer: true});
-hero.canvas.addEventListener('click', () => void hero.hop(80));
-plushVars(heroStage, HERO_LOOK.color!);
 
 // Editor --------------------------------------------------------------------
 const editor = createEditor({

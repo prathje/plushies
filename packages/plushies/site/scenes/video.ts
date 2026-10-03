@@ -1,5 +1,5 @@
 /** A video editor: an HTML stage and a timeline drawn on a canvas, so helpers glow on both. */
-import {fromCanvas, paintHighlight} from '../../src/index';
+import {fromCanvas, paintHighlight} from '@plushies/cursors';
 import {$, $$, htmlTask, inflate, other, rand, type Scene, type Task, type Worker} from './kit';
 
 const canvas = $<HTMLCanvasElement>('#timeline');

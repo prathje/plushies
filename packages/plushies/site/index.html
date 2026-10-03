@@ -3,14 +3,14 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>plushies — soft 3D plush characters for three.js</title>
-  <meta name="description" content="Soft, furry 3D plush characters for three.js. 17 silhouettes, five fabrics, floating eyes, glasses and hats, squash & stretch. Configure one and drop it into your page." />
+  <title>plushies — soft plush characters for AI helpers and more</title>
+  <meta name="description" content="Soft, furry plush characters for AI helpers and more: 3D plushies for three.js, and the helper cursors built on them. Watch three helpers work in six kinds of app, then configure your own plushie and drop it into your page." />
   <meta property="og:title" content="plushies" />
-  <meta property="og:description" content="Soft 3D plush characters for three.js — configure one and drop it into your page." />
+  <meta property="og:description" content="Soft plush characters for AI helpers and more. Configure one and drop it into your page." />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16 29C7 22 2 17 2 11a7 7 0 0 1 14-2 7 7 0 0 1 14 2c0 6-5 11-14 18z' fill='%23f47c9a'/%3E%3Ccircle cx='11.5' cy='13' r='2' fill='%2318130f'/%3E%3Ccircle cx='20.5' cy='13' r='2' fill='%2318130f'/%3E%3C/svg%3E" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@400;600;800&family=JetBrains+Mono:wght@400;600&display=swap" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@400;600;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" />
   <script>
     // Pick the theme before first paint (no flash).
     (function () {
@@ -19,7 +19,7 @@
       if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
     })();
   </script>
-  <!-- theme.css imports base.css first: one bundle keeps the cascade order. -->
+  <!-- theme.css imports base.css and helpers.css first: one bundle keeps the cascade order. -->
   <link rel="stylesheet" href="./styles/theme.css" />
 </head>
 <body>
@@ -33,10 +33,10 @@
       <span>plushies</span>
     </a>
     <nav class="nav-links" aria-label="Sections">
+      <a href="#cursors">Cursors</a>
       <a href="#gallery">Gallery</a>
       <a href="#editor">Editor</a>
       <a href="#docs">Docs</a>
-      <a href="cursors/" title="Plushie cursors for AI helpers: the demo">Cursors</a>
       <a class="repo-link" href="#" data-repo hidden>GitHub</a>
     </nav>
     <button class="icon-btn theme-btn" type="button" aria-label="Colour theme: auto" title="Colour theme">
@@ -45,25 +45,223 @@
   </header>
 
   <main id="top">
-    <section class="hero">
+    <!-- The opener: three plushies at work as AI-helper cursors (@plushies/cursors), in six kinds of app. -->
+    <section class="hero" id="cursors" aria-labelledby="hero-title">
       <div class="hero-copy">
-        <p class="eyebrow">soft 3D characters for three.js</p>
-        <h1 class="hero-title">Squishy 3D friends for the web.</h1>
-        <p class="lede">Pick a silhouette — heart, star, cloud, 17 in all — and plushies inflates it into a pillow with a rolled seam and real fur. Floating eyes, glasses and hats, squash &amp; stretch, and every pose is a plain number.</p>
-        <div class="install-pill">
-          <code>npm i plushies three</code>
-          <button class="copy-btn" type="button" data-copy-text="npm i plushies three">Copy</button>
+        <div>
+          <p class="eyebrow">soft plush characters for AI helpers and more</p>
+          <h1 class="hero-title" id="hero-title">Squishy 3D friends for the web.</h1>
         </div>
-        <div class="hero-actions">
-          <a class="btn btn-primary" href="#editor">Open the workbench</a>
-          <a class="btn btn-secondary" href="#docs">Read the docs</a>
+        <div class="hero-side">
+          <p class="lede">Pick a silhouette — heart, star, cloud, 17 in all — and plushies inflates it into a pillow with a rolled seam and real fur. Here three of them are at work as AI-helper cursors: pick a design and an app, or have one follow you around. Further down, <a href="#editor">make your own</a>.</p>
+          <div class="install-pill">
+            <code>npm i plushies three</code>
+            <button class="copy-btn" type="button" data-copy-text="npm i plushies three">Copy</button>
+          </div>
         </div>
       </div>
-      <div class="hero-stage stage" data-stage>
-        <div class="stage-mat" aria-hidden="true"></div>
-        <div class="plush-host" id="hero-plush" role="img" aria-label="A plush character. Click it to make it hop."></div>
-        <p class="hint hint-a" aria-hidden="true"><svg viewBox="0 0 60 30"><path d="M4 24C18 26 34 20 52 6m0 0-9 1m9-1-2 9" /></svg>follows your cursor</p>
-        <p class="hint hint-b" aria-hidden="true"><svg viewBox="0 0 60 30"><path d="M56 6C42 4 24 10 8 24m0 0 9 0m-9 0 1-9" /></svg>click to hop</p>
+
+      <div class="helpers-bar">
+        <div class="switch">
+          <span class="switch-label">Use case</span>
+          <div class="seg" role="radiogroup" aria-label="Use case" id="scenes">
+            <button type="button" role="radio" data-scene="video" aria-checked="true" tabindex="0">Video editor</button>
+            <button type="button" role="radio" data-scene="design" aria-checked="false" tabindex="-1">Design file</button>
+            <button type="button" role="radio" data-scene="website" aria-checked="false" tabindex="-1">Website</button>
+            <button type="button" role="radio" data-scene="sheet" aria-checked="false" tabindex="-1">Spreadsheet</button>
+            <button type="button" role="radio" data-scene="doc" aria-checked="false" tabindex="-1">Document</button>
+            <button type="button" role="radio" data-scene="pipeline" aria-checked="false" tabindex="-1">Render pipeline</button>
+          </div>
+        </div>
+        <div class="switch">
+          <span class="switch-label">Design</span>
+          <div class="seg" role="radiogroup" aria-label="Design" id="designs">
+            <button type="button" role="radio" data-design="live" aria-checked="true" tabindex="0">Live</button>
+            <button type="button" role="radio" data-design="buddy" aria-checked="false" tabindex="-1">Buddy</button>
+            <button type="button" role="radio" data-design="island" aria-checked="false" tabindex="-1">Island</button>
+            <button type="button" role="radio" data-design="mixed" aria-checked="false" tabindex="-1">Mixed</button>
+          </div>
+        </div>
+        <div class="switch">
+          <span class="switch-label">Follow me</span>
+          <div class="seg" role="radiogroup" aria-label="Which helper follows your pointer" id="follow">
+            <button type="button" role="radio" data-follow="" aria-checked="true" tabindex="0">Nobody</button>
+            <button type="button" role="radio" data-follow="Pip" aria-checked="false" tabindex="-1">Pip</button>
+            <button type="button" role="radio" data-follow="Biscuit" aria-checked="false" tabindex="-1">Biscuit</button>
+            <button type="button" role="radio" data-follow="Moss" aria-checked="false" tabindex="-1">Moss</button>
+          </div>
+        </div>
+        <div class="helpers-actions">
+          <label class="toggle"><input type="checkbox" id="plushies" checked /><span class="toggle-track"></span><span class="toggle-label">Plushies</span></label>
+          <button class="btn btn-secondary btn-small" type="button" id="pause" aria-pressed="false" title="Stop the helpers' script where it is">Pause</button>
+        </div>
+      </div>
+
+      <div class="helpers-layout">
+        <div class="workspace" id="workspace" aria-label="A mock video editor with AI helpers">
+          <p class="scene-note" id="scene-note"></p>
+
+          <!-- Video editor: an HTML slide and a canvas timeline. -->
+          <div class="scene" data-scene="video">
+            <div class="slide" id="stage">
+              <div class="logo" id="logo"><svg viewBox="0 0 32 32"><path d="M16 29C7 22 2 17 2 11a7 7 0 0 1 14-2 7 7 0 0 1 14 2c0 6-5 11-14 18z"/></svg>Plush&nbsp;Co.</div>
+              <h3 class="headline" id="headline">Soft things, made to last.</h3>
+              <p class="subtitle" id="subtitle">Every plushie is hand-stiched from recycled felt.</p>
+              <div class="chart" id="chart" aria-label="Bar chart"><i style="--h:.45"></i><i style="--h:.7"></i><i style="--h:.55"></i><i style="--h:.9"></i></div>
+              <button class="cta" id="cta" tabindex="-1">Shop the collection</button>
+            </div>
+            <div class="timeline">
+              <div class="timeline-head"><span>Timeline</span><small>canvas</small></div>
+              <canvas id="timeline" aria-label="Timeline drawn on a canvas"></canvas>
+            </div>
+          </div>
+
+          <!-- Design file: frames on a canvas, layers and properties. -->
+          <div class="scene" data-scene="design" hidden>
+            <div class="app fig" id="fig">
+              <div class="fig-side">
+                <b>Layers</b>
+                <ul>
+                  <li>Page 1</li>
+                  <li class="on" id="fig-layer">Hero / Desktop</li>
+                  <li>Hero / Mobile</li>
+                  <li>Components</li>
+                  <li>Archive</li>
+                </ul>
+              </div>
+              <div class="fig-canvas">
+                <div class="frame desktop" id="fig-desktop" style="--brand:#7c3aed;--r:8px">
+                  <span class="frame-name">Hero / Desktop</span>
+                  <div class="fnav"><i></i><i></i><i></i><i></i></div>
+                  <div class="fhero" id="fig-hero"><div class="lines"><i></i><i></i><i></i></div><div class="fig-img" id="fig-img" style="--img:linear-gradient(135deg, #f47c9a, #f5c518)"></div></div>
+                  <div class="cards" id="fig-cards"><i></i><i></i><i></i></div>
+                  <b class="fig-button" id="fig-button"></b>
+                </div>
+                <div class="frame mobile" id="fig-mobile" style="--brand:#7c3aed;--r:8px">
+                  <span class="frame-name">Hero / Mobile</span>
+                  <div class="fnav"><i></i><i></i></div>
+                  <div class="fig-img" style="--img:linear-gradient(135deg, #f47c9a, #f5c518)"></div>
+                  <div class="lines"><i></i><i></i><i></i></div>
+                  <div class="cards"><i></i><i></i></div>
+                  <b class="fig-button"></b>
+                </div>
+              </div>
+              <div class="fig-side">
+                <b>Design</b>
+                <div class="prop">Fill <span id="fig-fill">#7C3AED</span></div>
+                <div class="prop">Radius <span id="fig-radius">8px</span></div>
+                <div class="prop">Width <span>1440</span></div>
+                <div class="prop">Auto layout <span>↓ 24</span></div>
+                <b>Export</b>
+                <div class="prop">PNG <span>2×</span></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Website: a landing page in a browser window. -->
+          <div class="scene" data-scene="website" hidden>
+            <div class="app web" id="web">
+              <div class="browser-bar"><i></i><i></i><i></i><span class="url">plushco.shop</span></div>
+              <div class="web-page">
+                <nav class="web-nav" id="web-nav" style="--gap:3cqw"><b>Plush Co.</b><span>Shop</span><span>Story</span><span>Care</span><em>Cart (2)</em></nav>
+                <section class="web-hero">
+                  <div>
+                    <h3 id="web-h1">Soft things, made to last.</h3>
+                    <p id="web-p">Hand-stitched from recycled felt, in a small workshop by the sea.</p>
+                    <button id="web-cta" tabindex="-1" style="--cta:#7c3aed">Shop now</button>
+                  </div>
+                  <div class="web-img" id="web-img" style="--img:linear-gradient(135deg, #f47c9a, #f5c518)"></div>
+                </section>
+                <section class="web-cards" id="web-cards">
+                  <div><b>Free shipping</b><p>On every order over €40, worldwide.</p></div>
+                  <div><b>Made to last</b><p>Double seams and a lifetime repair promise.</p></div>
+                  <div><b>Recycled felt</b><p>Soft, warm, and spun from old bottles.</p></div>
+                </section>
+                <footer class="web-footer" id="web-footer">© Plush Co. 2026 · Privacy · Terms</footer>
+              </div>
+            </div>
+          </div>
+
+          <!-- Spreadsheet: a grid built by scenes/sheet.ts. -->
+          <div class="scene" data-scene="sheet" hidden>
+            <div class="app sheet">
+              <div class="sheet-bar"><span class="ref" id="sheet-ref">C3</span><span class="fx" id="sheet-fx"></span></div>
+              <table id="sheet-table" aria-label="Sales by product"></table>
+            </div>
+          </div>
+
+          <!-- Document: a page with comments in the margin. -->
+          <div class="scene" data-scene="doc" hidden>
+            <div class="app doc">
+              <div class="doc-tools"><span class="on">B</span><span>I</span><span>U</span><i></i><span>H1</span><span>H2</span><i></i><span>• List</span><span>1. List</span><i></i><span>Comment</span></div>
+              <div class="doc-body">
+                <div class="doc-page">
+                  <h3 id="doc-title">Caring for your plushie</h3>
+                  <p class="byline">Plush Co. · Care guide · Draft 3</p>
+                  <p id="doc-intro">A plushie that is loved gets dirty, and that is fine. This guide covers washing, drying and the small repairs that keep a well-loved friend together for years.</p>
+                  <h4 id="doc-h2">Washing</h4>
+                  <p id="doc-p2">Most plushies can go in the washing <mark>machien</mark> on a cold, gentle cycle. Put them in a pillowcase first so buttons and tags survive the spin.</p>
+                  <ul id="doc-list">
+                    <li>Cold water, gentle cycle</li>
+                    <li>No bleach, no softener</li>
+                    <li>Pillowcase or laundry bag</li>
+                  </ul>
+                  <h4>Repairs</h4>
+                  <p>A loose seam is a five-minute fix with a ladder stitch. Eyes and noses are sewn on, never glued, so they can be replaced.</p>
+                </div>
+                <aside class="doc-comments">
+                  <div class="comment" id="doc-comment"><b>Moss</b>Could we add drying tips here? Everyone asks.</div>
+                  <div class="comment resolved"><b>Biscuit</b>Sentence case for the headings?</div>
+                </aside>
+              </div>
+            </div>
+          </div>
+
+          <!-- Render pipeline: nodes and wires (scenes/pipeline.ts draws the wires). -->
+          <div class="scene" data-scene="pipeline" hidden>
+            <div class="app pipe" id="pipe">
+              <svg id="pipe-wires" aria-hidden="true"></svg>
+              <div class="node" id="n-src" style="--x:3%;--y:14%;--c:#5b8def"><b>Source</b><span id="pipe-src">intro.mp4 · 00:00 – 00:12</span><i class="port out"></i></div>
+              <div class="node" id="n-grade" style="--x:29%;--y:8%;--c:#f2b33d"><b>Colour grade</b><span>Warmth <output id="pipe-warmth">+12</output> · Contrast 1.1</span><div class="bar"><i id="pipe-warmth-bar" style="--p:40%"></i></div><i class="port in"></i><i class="port out"></i></div>
+              <div class="node" id="n-caps" style="--x:55%;--y:14%;--c:#8fd19e"><b>Captions</b><span id="pipe-caps">Burn-in · en</span><i class="port in"></i><i class="port out"></i></div>
+              <div class="node" id="n-audio" style="--x:3%;--y:64%;--c:#f47c9a"><b>Audio</b><span>voice.wav · music.mp3</span><i class="port out"></i></div>
+              <div class="node" id="n-mix" style="--x:29%;--y:68%;--c:#f47c9a"><b>Mix</b><span>Duck music −12 dB · −14 LUFS</span><i class="port in"></i><i class="port out"></i></div>
+              <div class="node" id="n-encode" style="--x:55%;--y:56%;--c:#7c3aed"><b>Encode</b><span id="pipe-encode">H.265 · 1080p · 12 Mb/s</span><i class="port in a"></i><i class="port in b"></i><i class="port out"></i></div>
+              <div class="node" id="n-out" style="--x:78%;--y:36%;--c:#f5c518"><b>Output</b><span id="pipe-out">Preview · not rendered</span><div class="bar"><i id="pipe-render" style="--p:0%"></i></div><i class="port in"></i></div>
+            </div>
+          </div>
+
+        </div>
+
+        <aside class="panel">
+          <h2>Playground</h2>
+          <p class="muted">Take over one helper. It drops its task and waits while you drive.</p>
+          <label>Helper
+            <select id="who"></select>
+          </label>
+          <label class="toggle"><input type="checkbox" id="own-plushie" checked /><span class="toggle-track"></span><span class="toggle-label">With a plushie</span></label>
+          <label>Working on
+            <input id="text" value="Recolouring the button" />
+          </label>
+          <label>Detail
+            <input id="detail" value="Trying #e8574f" />
+          </label>
+          <label>Progress <output id="pv">40%</output>
+            <input id="progress" type="range" min="0" max="100" value="40" />
+          </label>
+          <div class="row">
+            <button class="btn btn-secondary btn-small" type="button" id="b-status">Set status</button>
+            <button class="btn btn-secondary btn-small" type="button" id="b-clear">Clear</button>
+          </div>
+          <div class="row">
+            <button class="btn btn-secondary btn-small" type="button" id="b-say">Say hi</button>
+            <button class="btn btn-secondary btn-small" type="button" id="b-click">Click</button>
+            <button class="btn btn-secondary btn-small" type="button" id="b-done">Done</button>
+          </div>
+          <button class="btn btn-primary btn-small" type="button" id="b-resume">Resume script</button>
+          <hr />
+          <p class="muted">Built with <code>@plushies/cursors</code>: a plush character with its own pointer, name tag and live status box. <a href="#docs-cursors">How to use it</a>.</p>
+        </aside>
       </div>
     </section>
 
@@ -77,8 +275,8 @@
 
     <section class="section" id="editor" aria-labelledby="editor-title">
       <header class="section-head">
-        <h2 id="editor-title">The workbench</h2>
-        <p>Make your own. The code updates as you go — copy it, or share a link to your plushie.</p>
+        <h2 id="editor-title">Make your own</h2>
+        <p>The workbench: pick a shape, fabric and face. The code updates as you go — copy it, or share a link to your plushie.</p>
       </header>
       <div class="editor">
         <div class="editor-main">
@@ -113,7 +311,7 @@
     <section class="section docs" id="docs" aria-labelledby="docs-title">
       <header class="section-head">
         <h2 id="docs-title">Use it</h2>
-        <p>Three ways in, depending on what your page already has.</p>
+        <p>Three ways in, depending on what your page already has — and the cursors, for when your plushie has work to do.</p>
       </header>
       <div class="docs-body" id="docs-body"></div>
     </section>
@@ -123,7 +321,7 @@
     <div class="footer-inner">
       <div class="footer-plush plush-host" id="footer-plush" aria-hidden="true"></div>
       <p><strong>plushies</strong> · MIT licensed · built on <a href="https://threejs.org">three.js</a></p>
-      <p class="footer-links"><a href="#" data-repo hidden>Source on GitHub</a> <a href="#docs">Docs</a> <a href="#editor">Editor</a></p>
+      <p class="footer-links"><a href="#" data-repo hidden>Source on GitHub</a> <a href="#docs">Docs</a> <a href="#editor">Editor</a> <a href="#cursors">Cursors</a></p>
     </div>
   </footer>
 

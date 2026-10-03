@@ -24,15 +24,12 @@
     "README.md",
     "LICENSE"
   ],
-  "sideEffects": ["./site/*.ts"],
   "scripts": {
     "build": "bun run build.ts",
     "typecheck": "tsc -p tsconfig.json",
     "test": "bun test test",
     "test:unit": "bun test test/unit.test.ts",
-    "test:browser": "bun test test/lib.test.ts test/site.test.ts",
-    "site:dev": "bun --port 4521 site/index.html",
-    "site:build": "bun run site/build.ts"
+    "test:browser": "bun test test/lib.test.ts"
   },
   "dependencies": {
     "plushies": "workspace:^"

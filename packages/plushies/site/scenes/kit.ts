@@ -3,7 +3,7 @@
  * and a line about it) and the Tasks a helper can pick up there: a target to
  * glide to, a glow, a few steps, and a change to the page at the end.
  */
-import type {Highlight, PlushieCursor, Target} from '../../src/index';
+import type {Highlight, PlushieCursor, Target} from '@plushies/cursors';
 
 export const $ = <T extends Element = HTMLElement>(selector: string, root: ParentNode = document) => root.querySelector<T>(selector)!;
 export const $$ = <T extends HTMLElement = HTMLElement>(selector: string, root: ParentNode = document) => [...root.querySelectorAll<T>(selector)];

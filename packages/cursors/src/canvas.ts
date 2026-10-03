@@ -74,7 +74,7 @@ const LAP_MS = 2200;
 
 /**
  * Draw the glow round `box` (or a polygon, e.g. a rotated shape's corners) into a 2D
- * context, in its current transform — VideoZero's agent mark: a tint that
+ * context, in its current transform — the editor's agent mark: a tint that
  * breathes while working, a solid outline, and a light running round it.
  * Call it every frame while it should show; request frames while `busy`.
  */

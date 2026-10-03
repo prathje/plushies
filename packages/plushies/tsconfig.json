@@ -8,7 +8,13 @@
     "noUnusedLocals": true,
     "skipLibCheck": true,
     "noEmit": true,
-    "types": ["bun"]
+    "types": ["bun"],
+    "baseUrl": ".",
+    "paths": {
+      "plushies": ["./src/index.ts"],
+      "plushies/viewer": ["./src/viewer.ts"],
+      "@plushies/cursors": ["../cursors/src/index.ts"]
+    }
   },
   "include": ["src", "test", "site", "build.ts"]
 }

@@ -1,5 +1,5 @@
 /**
- * 'live' — VideoZero's live editor cursor, with the plushie where the agent
+ * 'live' — a live editor's cursor, with the plushie where the agent
  * sparkle sat: the tail-less rounded arrow, a name pill nested in the V at
  * its back that grows into a chat bubble (squared corner toward the tip)
  * while it works, and the sparkle's twinkling glints beside the plushie.

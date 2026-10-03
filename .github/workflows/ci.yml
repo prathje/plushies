@@ -30,14 +30,14 @@ jobs:
         run: bun run test
       - name: Build (both packages)
         run: bun run build
-      - name: Build the site (plushies, with the cursor demo at cursors/)
+      - name: Build the site (plushies and the cursor demo, one page)
         run: bun run site:build
 
       - name: Install Chromium
         run: bunx playwright install --with-deps chromium
-      - name: Browser tests (plushies builds + site)
+      - name: Browser tests (plushies builds + the site, cursor demo included)
         run: bun run --cwd packages/plushies test:e2e
-      - name: Browser tests (cursors lib + demo)
+      - name: Browser tests (cursors lib)
         if: ${{ !cancelled() }}
         run: bun run --cwd packages/cursors test:browser
 

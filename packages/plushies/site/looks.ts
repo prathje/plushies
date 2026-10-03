@@ -10,6 +10,7 @@ export interface NamedLook {
   look: Look;
 }
 
+/** The editor's starting plushie. */
 export const HERO_LOOK: Look = {
   kind: 'heart',
   color: '#f47c9a',

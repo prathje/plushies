@@ -29,7 +29,7 @@ glow.clear(0.8);
 
 | | |
 |---|---|
-| `live` | VideoZero's live editor cursor: the tail-less rounded arrow and a name pill tucked into the V of the arrow. While the helper works, the pill grows into a chat bubble whose square corner faces the tip, with a progress bar. The plushie sits where the agent sparkle used to be, and the sparkle's glints twinkle beside it. |
+| `live` | A live editor's cursor: the tail-less rounded arrow and a name pill tucked into the V of the arrow. While the helper works, the pill grows into a chat bubble whose square corner faces the tip, with a progress bar. The plushie sits where the agent sparkle used to be, and the sparkle's glints twinkle beside it. |
 | `buddy` | The plushie floats like a balloon on a string tied to a felt pointer. It trails behind and sways as it moves. Its name is a sewn-on fabric tag. Its status is a speech bubble typed out letter by letter, with thinking dots and a stitched progress seam. |
 | `island` | A classic pointer with a dark glass capsule. The plushie sits on a round seat ringed by its progress. The capsule grows into a status card (a shimmering line, a step chip and a detail line) and shrinks back to a name pill when the helper is done. |
 
@@ -85,11 +85,11 @@ The cursor that changed last is drawn on top of the others. Every status change 
 
 Highlights:
 
-- **`highlight(target, {busy, radius})`**: VideoZero's "working on this" mark, an overlay in the cursor's colour. While `busy` (the default) its tint breathes and a light runs round the border. It is separate from pointing, so you decide what glows and when. It returns `{update(target, options?), clear(delay?)}`; `clear` fades it out after `delay` seconds. Disposing the cursor removes its highlights.
+- **`highlight(target, {busy, radius})`**: the editor's "working on this" mark, an overlay in the cursor's colour. While `busy` (the default) its tint breathes and a light runs round the border. It is separate from pointing, so you decide what glows and when. It returns `{update(target, options?), clear(delay?)}`; `clear` fades it out after `delay` seconds. Disposing the cursor removes its highlights.
 
 Changing a cursor:
 
-- **`setDesign(design)`**, **`setName(name)`**, **`setPlushie(on)`**.
+- **`setDesign(design)`**, **`setName(name)`**, **`setSpeed(speed)`**, **`setPlushie(on)`**.
 - **`show(on)`**: hides or shows the cursor; hidden, it stops animating.
 - **`setColor(color)`**: a new accent colour.
 - **`setLook(look)`**: changes the plushie's look, merged into the current one.
@@ -133,12 +133,10 @@ paintHighlight(ctx, shape.corners(), '#7c3aed', {radius: 4});
 ## Develop
 
 ```sh
-bun run site:dev   # the demo, http://localhost:4521
-bun run site:build # the demo as a static site in _site/ (--out <dir> for elsewhere)
-bun run test       # unit tests + browser tests (Playwright)
+bun run test       # unit tests + browser tests of the library (Playwright)
 bun run build      # dist/index.js and types
 ```
 
-The demo is published with the plushies site, at `cursors/`. Three helpers take turns working in a mock app, and a "Use case" switch picks which one: a video editor (an HTML slide plus a timeline drawn on a canvas), a design file, a website, a spreadsheet, a document or a node-based render pipeline. Each lives in `site/scenes/` as a list of tasks (a target, a glow, a few steps, a change to the page). The design switch applies to all of them. The playground lets you take over one helper, and "Pip follows me" makes Pip trail your mouse.
+The demo opens the plushies site (`bun run site:dev` in `packages/plushies`, http://localhost:4517): three helpers take turns working in a mock app, and a "Use case" switch picks which one: a video editor (an HTML slide plus a timeline drawn on a canvas), a design file, a website, a spreadsheet, a document or a node-based render pipeline. Each lives in `packages/plushies/site/scenes/` as a list of tasks (a target, a glow, a few steps, a change to the page); `site/helpers.ts` runs them. The design switch applies to all of them, the playground lets you take over one helper, and "Follow me" has one of them trail your pointer around the whole page (the cursors live on the page, not in the mock app).
 
 This package lives in the `plushies` monorepo; run `bun install` at the repo root and the commands above in `packages/cursors`. `plushies` is a workspace dependency (`workspace:*`), which `bun publish` replaces with its version.

@@ -16,7 +16,7 @@
  *
  * Positions are pixels in the container (its padding box, scrolling with its
  * content). Moves are springs: `moveTo`/`pointAt` resolve with how the move
- * ended. Three designs: 'live' (VideoZero's live editor cursors), 'buddy' (a
+ * ended. Three designs: 'live' (a live editor's cursors), 'buddy' (a
  * plushie on a string with a sewn-on name tag and speech bubble) and 'island'
  * (a compact capsule that grows into a status card).
  */

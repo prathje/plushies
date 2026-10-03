@@ -4,6 +4,8 @@ import {copyText, tabs} from './ui';
 
 type Lang = 'js' | 'html' | 'sh';
 
+const CURSORS_README = 'https://github.com/prathje/plushies/tree/main/packages/cursors#readme';
+
 const INSTALL: {id: string; label: string; intro: string; blocks: [Lang, string][]}[] = [
   {
     id: 'npm',
@@ -166,5 +168,32 @@ renderer.setAnimationLoop(time => {
       ).join('')}</tbody>
     </table></div>`;
 
-  root.append(install, sizes, scene, api, options);
+  // The cursors: the opener's helpers, as a package.
+  const cursors = document.createElement('div');
+  cursors.className = 'doc-card';
+  cursors.id = 'docs-cursors';
+  cursors.innerHTML = `<h3>Plushie cursors for AI helpers</h3><p>The helpers at the top of the page are <code>@plushies/cursors</code>: a plushie with its own pointer, name tag and live status box, in one of three designs. Point it at an element (or a box on a canvas), tell it what it's working on, let it click, and it hops when it's done. Full API in the <a href="${CURSORS_README}">package README</a>.</p>`;
+  cursors.append(
+    codeBlock('sh', 'npm i @plushies/cursors plushies three'),
+    codeBlock(
+      'js',
+      `import * as THREE from 'three';
+import {createPlushieCursor} from '@plushies/cursors';
+
+const pip = createPlushieCursor(THREE, {
+  name: 'Pip',
+  look: {kind: 'star', color: '#f5c518', hat: 'cap'},
+  design: 'live', // or 'buddy', 'island'
+});
+
+await pip.pointAt(document.querySelector('#headline'));
+const glow = pip.highlight(document.querySelector('#headline'));
+pip.status({text: 'Rewriting the headline', progress: 0.4});
+await pip.click();
+glow.clear();
+await pip.done('Headline rewritten');`,
+    ),
+  );
+
+  root.append(install, sizes, scene, api, options, cursors);
 }

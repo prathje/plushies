@@ -2,6 +2,7 @@
    oat-milk and lilac chrome, so the plushie is the only thing in full colour. */
 
 @import './base.css';
+@import './helpers.css';
 
 :root {
   --bg: #f7f2ec;
@@ -101,7 +102,6 @@ body {
 .look-stage .stage-mat { width: 88%; height: 84%; }
 .editor-stage { background: var(--surface); }
 .editor-stage .stage-mat { top: 46%; width: 70%; height: 78%; }
-.hint { font-family: var(--font-display); font-weight: 500; color: var(--accent); }
 
 .look { box-shadow: var(--puff); }
 .look::after {
@@ -114,7 +114,9 @@ body {
 /* Wells and pillows. */
 .seg { border-radius: var(--r-pill); box-shadow: var(--dent); padding: 4px; }
 .seg-option span { border-radius: var(--r-pill); min-height: 36px; }
-.seg-option input:checked + span { box-shadow: var(--puff-sm); }
+.seg-option input:checked + span, .seg > button[aria-checked='true'] { box-shadow: var(--puff-sm); }
+.seg > button { border-radius: var(--r-pill); min-height: 36px; }
+.workspace, .panel { box-shadow: var(--puff); }
 .shape-tile { border: 0; background: var(--surface); box-shadow: var(--puff-sm); border-radius: 20px; }
 .shape-tile[aria-checked='true'] { box-shadow: var(--puff-sm), 0 0 0 3px var(--accent); transform: translateY(-2px); }
 .swatch { border-radius: 50%; box-shadow: 0 4px 8px -2px var(--drop), inset 0 2px 1px rgb(255 255 255 / 0.45), inset 0 -4px 6px rgb(0 0 0 / 0.12); }

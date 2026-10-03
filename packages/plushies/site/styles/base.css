@@ -103,7 +103,7 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: var(--display-weight
 .theme-btn[data-mode='auto'] svg circle { fill: color-mix(in oklab, currentColor 45%, transparent); }
 @media (max-width: 560px) {
   .nav-links a:not(.repo-link) { display: none; }
-  .nav-links a[href='#editor'], .nav-links a[href='cursors/'] { display: inline-block; }
+  .nav-links a[href='#editor'], .nav-links a[href='#cursors'] { display: inline-block; }
   .nav-links { gap: 0; }
   .nav-links a { padding: 8px 6px; }
 }
@@ -133,44 +133,10 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: var(--display-weight
 }
 .copy-btn.is-done { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
 
-/* --- Hero ----------------------------------------------------------------- */
-.hero {
-  max-width: var(--max); margin: 0 auto; padding: 24px var(--gutter) 40px;
-  display: grid; gap: 24px; align-items: center;
-  grid-template-columns: minmax(0, 1fr);
-}
-@media (min-width: 900px) {
-  .hero { grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: 32px; padding-top: 48px; min-height: min(760px, calc(100vh - 64px)); }
-}
-.hero-copy { display: flex; flex-direction: column; gap: 20px; order: 2; }
-@media (min-width: 900px) { .hero-copy { order: 0; } }
-.eyebrow { margin: 0; font: 700 0.8rem/1 var(--font-body); text-transform: uppercase; letter-spacing: 0.09em; color: var(--ink-2); }
-.hero-title { font-size: clamp(2.6rem, 7vw, 5.2rem); line-height: 0.98; }
-.lede { margin: 0; font-size: 1.125rem; color: var(--ink-2); max-width: 34em; }
-.install-pill {
-  display: flex; align-items: center; gap: 12px; justify-content: space-between;
-  max-width: 340px; padding: 8px 8px 8px 18px; border-radius: var(--r-pill);
-  background: var(--code-bg); color: var(--code-ink);
-}
-.install-pill code { background: none; padding: 0; font-size: 0.95rem; }
-.install-pill code::before { content: '$ '; opacity: 0.5; }
-.hero-actions { display: flex; flex-wrap: wrap; gap: 12px; }
-
+/* --- Hero: see helpers.css (the cursor demo is the opener) ------------------ */
 .stage { position: relative; isolation: isolate; }
 .stage .plush-host { position: absolute; inset: 0; z-index: 1; }
 .stage-mat { position: absolute; pointer-events: none; z-index: 0; }
-.hero-stage { aspect-ratio: 1; width: min(100%, 600px); justify-self: center; }
-.hero-stage .plush-host { cursor: pointer; }
-.hint {
-  position: absolute; z-index: 2; margin: 0; display: flex; align-items: center; gap: 6px;
-  font: 600 1.05rem/1 var(--font-note); color: var(--ink-2); pointer-events: none;
-}
-.hint svg { width: 52px; height: 26px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-.hint-a { left: 2%; bottom: 10%; flex-direction: row-reverse; }
-.hint-b { right: 0; top: 10%; flex-direction: row-reverse; }
-.hint-b svg { order: 1; }
-@media (max-width: 560px) { .hint { display: none; } }
-
 /* --- Sections --------------------------------------------------------------- */
 .section { max-width: var(--max); margin: 0 auto; padding: 56px var(--gutter); position: relative; }
 .section-head { position: relative; max-width: 40em; margin-bottom: 28px; }

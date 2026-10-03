@@ -1,73 +1,74 @@
-:root {
-  --bg: #f6f1ea;
-  --card: #fffdf9;
-  --ink: #241c16;
-  --muted: #7d7064;
-  --line: #e7ded3;
-  --accent: #7c3aed;
-  --stage-bg: #1d1a2b;
-  color-scheme: light;
+/* The opener: three plushies at work as AI-helper cursors in a mock app.
+   Controls and cards use the site's tokens; the mock apps keep their own
+   fixed colours, sized by their width (container queries). */
+
+/* --- Hero: title and lede side by side, the demo underneath ------------- */
+.hero { max-width: var(--max); margin: 0 auto; padding: 24px var(--gutter) 40px; display: grid; gap: 22px; }
+.hero-copy { display: grid; gap: 18px 40px; align-items: end; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 900px) { .hero { padding-top: 40px; } .hero-copy { grid-template-columns: minmax(0, 6fr) minmax(0, 5fr); } }
+.hero-side { display: flex; flex-direction: column; gap: 16px; }
+.hero-title { font-size: clamp(2.6rem, 6.5vw, 4.6rem); line-height: 0.98; margin-top: 10px; }
+.lede { margin: 0; font-size: 1.0625rem; color: var(--ink-2); max-width: 34em; }
+.install-pill {
+  display: flex; align-items: center; gap: 12px; justify-content: space-between;
+  max-width: 340px; padding: 8px 8px 8px 18px; border-radius: var(--r-pill);
+  background: var(--code-bg); color: var(--code-ink);
 }
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --bg: #121016;
-    --card: #2a2631;
-    --ink: #f1ece6;
-    --muted: #a59a90;
-    --line: #3b3545;
-    color-scheme: dark;
-  }
+.install-pill code { background: none; padding: 0; font-size: 0.95rem; }
+.install-pill code::before { content: '$ '; opacity: 0.5; }
+
+/* --- The switches ------------------------------------------------------ */
+/* One row per switch, labels in a column; the actions sit to the right of them all. */
+.helpers-bar { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px 14px; align-items: center; }
+.switch { display: contents; }
+.switch-label { font: 700 0.72rem/1 var(--font-body); text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-2); }
+.switch .seg { justify-self: start; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; max-width: 100%; }
+.switch .seg::-webkit-scrollbar { display: none; }
+/* Button radiogroups (the design, the use case, who follows): the same well as the editor's segmented controls. */
+.seg > button {
+  flex: none; border: 0; background: transparent; color: var(--ink-2); cursor: pointer;
+  min-height: 34px; padding: 0 12px; border-radius: calc(var(--r-m) - 3px);
+  font: 600 0.84rem/1 var(--font-body); white-space: nowrap;
+  transition: background-color 0.18s, color 0.18s, box-shadow 0.18s;
 }
-/* Picked on the plushies site. */
-:root[data-theme="dark"] {
-  --bg: #121016;
-  --card: #2a2631;
-  --ink: #f1ece6;
-  --muted: #a59a90;
-  --line: #3b3545;
-  color-scheme: dark;
-}
-* { box-sizing: border-box; }
-body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.45 Inter, system-ui, sans-serif; min-height: 100vh; }
+.seg > button:hover { color: var(--ink); }
+.seg > button[aria-checked='true'] { background: var(--surface); color: var(--ink); box-shadow: var(--shadow-ctl); }
+.seg > button small { font-weight: 500; font-size: 0.7rem; margin-left: 3px; opacity: 0.7; }
+.helpers-actions { grid-column: 3; grid-row: 1 / span 3; display: flex; align-items: center; gap: 16px; }
+.btn[aria-pressed='true'] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
 
-.top { display: flex; align-items: center; gap: 16px; padding: 14px 24px; flex-wrap: wrap; }
-.brand { color: inherit; text-decoration: none; font: 600 19px/1 Fredoka, system-ui, sans-serif; display: flex; align-items: center; gap: 8px; margin-right: auto; }
-.brand .dot { width: 12px; height: 12px; border-radius: 50%; background: linear-gradient(135deg, #f47c9a, #f5c518); }
-.seg { display: flex; background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 3px; gap: 2px; }
-.seg button { border: 0; background: none; color: var(--ink); font: 600 13px/1 Inter, sans-serif; padding: 8px 12px; border-radius: 9px; cursor: pointer; white-space: nowrap; }
-.seg button small { font-weight: 500; color: var(--muted); font-size: 10.5px; margin-left: 3px; }
-.seg button[aria-checked="true"] { background: var(--ink); color: var(--bg); }
-.seg button[aria-checked="true"] small { color: inherit; opacity: .7; }
-.top-actions { display: flex; align-items: center; gap: 12px; margin-left: auto; }
-.toggle { display: flex; align-items: center; gap: 6px; font-weight: 500; cursor: pointer; }
-
-/* The use case: which kind of app the helpers work in. */
-.cases { display: flex; align-items: center; gap: 12px; padding: 0 24px 10px; flex-wrap: wrap; }
-.cases-label { font-weight: 600; font-size: 12.5px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
-.cases .seg { overflow-x: auto; max-width: 100%; }
-
-.btn { border: 1px solid var(--line); background: var(--card); color: var(--ink); font: 600 13px/1 Inter, sans-serif; padding: 9px 12px; border-radius: 10px; cursor: pointer; }
-.btn:hover { border-color: var(--muted); }
-.btn.ghost { background: none; width: 100%; }
-.btn[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
-
-.layout { display: grid; grid-template-columns: minmax(0, 1fr) 290px; gap: 20px; padding: 0 24px 28px; }
-@media (max-width: 900px) { .layout { grid-template-columns: 1fr; } }
-
-.workspace { position: relative; align-self: start; background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 56px 64px 22px; }
+/* --- The workspace and the panel ---------------------------------------- */
+.helpers-layout { display: grid; grid-template-columns: minmax(0, 1fr) 290px; gap: 20px; align-items: start; }
+@media (max-width: 900px) { .helpers-layout { grid-template-columns: minmax(0, 1fr); } }
+.workspace { position: relative; background: var(--surface); border-radius: var(--r-l); box-shadow: var(--shadow-card); padding: 22px 64px; min-width: 0; }
+/* What this use case shows, above the mock app. */
+.scene-note { max-width: 860px; margin: 0 auto 22px; color: var(--ink-2); font-size: 0.95rem; line-height: 1.5; }
 .scene { max-width: 860px; margin: 0 auto; }
-.scene[hidden] { display: none; }
 /* Every mock app: a window with its own fixed colours, sized by its width. */
-.stage, .app { position: relative; border-radius: 12px; overflow: hidden; container-type: inline-size; box-shadow: 0 18px 40px rgba(29, 26, 43, .22); }
+.slide, .app { position: relative; border-radius: 12px; overflow: hidden; container-type: inline-size; box-shadow: 0 18px 40px rgba(29, 26, 43, 0.22); }
 .app { aspect-ratio: 4 / 3; font-family: Inter, system-ui, sans-serif; font-size: 1.5cqw; line-height: 1.4; }
 @media (prefers-color-scheme: dark) {
   /* A window's edge would melt into the card: ring it and lift it. */
-  :root:not([data-theme="light"]) :is(.stage, .app) { box-shadow: 0 0 0 1px rgba(255, 255, 255, .14), 0 18px 40px rgba(0, 0, 0, .55); }
+  :root:not([data-theme='light']) :is(.slide, .app) { box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.14), 0 18px 40px rgba(0, 0, 0, 0.55); }
 }
-:root[data-theme="dark"] :is(.stage, .app) { box-shadow: 0 0 0 1px rgba(255, 255, 255, .14), 0 18px 40px rgba(0, 0, 0, .55); }
+:root[data-theme='dark'] :is(.slide, .app) { box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.14), 0 18px 40px rgba(0, 0, 0, 0.55); }
+
+.panel { background: var(--surface); border-radius: var(--r-l); box-shadow: var(--shadow-card); padding: 20px; display: flex; flex-direction: column; gap: 12px; font-size: 0.9rem; min-width: 0; }
+.panel h2 { font-size: 1.15rem; }
+.panel p { margin: -6px 0 0; font-size: 0.875rem; }
+.panel label { display: flex; flex-direction: column; gap: 5px; font: 700 0.72rem/1.2 var(--font-body); text-transform: uppercase; letter-spacing: 0.07em; color: var(--ink-2); }
+.panel label.toggle { flex-direction: row; text-transform: none; letter-spacing: 0; }
+.panel label output { font: 500 0.8rem/1 var(--font-mono); color: var(--ink); text-transform: none; letter-spacing: 0; }
+.panel input:not([type]), .panel select {
+  font: 500 0.875rem var(--font-body); color: var(--ink); height: 36px; padding: 0 12px;
+  border-radius: var(--r-pill); border: 1px solid var(--line-strong); background: var(--bg); letter-spacing: 0; text-transform: none;
+}
+.panel .row { display: flex; gap: 6px; }
+.panel .row .btn, .panel > .btn { flex: 1; width: 100%; padding-inline: 10px; }
+.panel hr { border: 0; border-top: 1px solid var(--line); margin: 4px 0; width: 100%; }
 
 /* --- Video editor ------------------------------------------------------- */
-.stage { aspect-ratio: 16 / 9; background: radial-gradient(120% 90% at 85% 10%, #3b2f63 0%, var(--stage-bg) 55%); color: #fff; padding: 5% 6%; }
+.slide { aspect-ratio: 16 / 9; background: radial-gradient(120% 90% at 85% 10%, #3b2f63 0%, #1d1a2b 55%); color: #fff; padding: 5% 6%; font-family: Inter, system-ui, sans-serif; }
 .logo { display: inline-flex; align-items: center; gap: 6px; font: 600 2.1cqw/1 Fredoka, sans-serif; padding: .4em .7em; border-radius: 99px; background: rgba(255,255,255,.1); transition: transform .5s cubic-bezier(.3, 1.4, .5, 1); }
 .logo svg { width: 1.2em; height: 1.2em; fill: #f47c9a; }
 .headline { font: 700 5.4cqw/1.05 Inter, sans-serif; letter-spacing: -.03em; margin: 5% 0 2%; max-width: 62%; transition: opacity .3s; }
@@ -78,13 +79,9 @@ body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.45 Inte
 .cta { position: absolute; left: 6%; bottom: 12%; font: 600 1.8cqw/1 Inter, sans-serif; border: 0; color: #1d1a2b; background: #f5c518; padding: 1em 1.5em; border-radius: 99px; transition: background .4s; }
 
 .timeline { margin: 22px auto 0; }
-.timeline-head { display: flex; gap: 8px; align-items: baseline; font-weight: 600; margin-bottom: 8px; }
-.timeline-head small, .muted { color: var(--muted); font-weight: 500; }
-#timeline { display: block; width: 100%; height: 118px; border-radius: 12px; background: #f1ebe3; }
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) #timeline { background: #1d1a22; }
-}
-:root[data-theme="dark"] #timeline { background: #1d1a22; }
+.timeline-head { display: flex; gap: 8px; align-items: baseline; font-weight: 700; margin-bottom: 8px; font-size: 0.9rem; }
+.timeline-head small { color: var(--ink-2); font-weight: 600; }
+#timeline { display: block; width: 100%; height: 118px; border-radius: 12px; background: var(--bg-2); }
 
 /* --- Design file -------------------------------------------------------- */
 .fig { display: grid; grid-template-columns: 19% 1fr 21%; background: #e9e9ee; color: #26262b; }
@@ -101,13 +98,13 @@ body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.45 Inte
 .frame-name { position: absolute; top: -1.9cqw; left: 0; font-size: 1.15cqw; color: #6b6b75; white-space: nowrap; }
 .frame.desktop { left: 7%; top: 11%; width: 60%; height: 74%; }
 .frame.mobile { left: 73%; top: 11%; width: 20%; height: 74%; display: flex; flex-direction: column; gap: 1.6cqw; padding: 2.2cqw 1cqw; }
-.frame .nav { display: flex; gap: 4%; height: 4%; }
-.frame.desktop .nav { position: absolute; left: 5%; right: 5%; top: 5%; height: 5%; }
-.frame .nav i { width: 9%; background: #e2e2e8; border-radius: 99px; }
-.frame .nav i:first-child { width: 14%; background: var(--brand); transition: background .4s; }
-.frame .hero { position: absolute; left: 5%; right: 5%; top: 17%; height: 40%; display: flex; gap: 6%; }
+.frame .fnav { display: flex; gap: 4%; height: 4%; }
+.frame.desktop .fnav { position: absolute; left: 5%; right: 5%; top: 5%; height: 5%; }
+.frame .fnav i { width: 9%; background: #e2e2e8; border-radius: 99px; }
+.frame .fnav i:first-child { width: 14%; background: var(--brand); transition: background .4s; }
+.frame .fhero { position: absolute; left: 5%; right: 5%; top: 17%; height: 40%; display: flex; gap: 6%; }
 .frame .lines { flex: 1; display: flex; flex-direction: column; gap: 9%; justify-content: center; padding-left: 0; transition: padding .5s cubic-bezier(.3, 1.3, .5, 1); }
-.frame .hero.shifted .lines { padding-left: 12%; }
+.frame .fhero.shifted .lines { padding-left: 12%; }
 .frame .lines i { height: 9%; width: 90%; background: #e2e2e8; border-radius: 99px; }
 .frame .lines i:nth-child(1) { height: 16%; width: 72%; background: #9a9aa6; }
 .frame .lines i:nth-child(3) { width: 58%; }
@@ -200,30 +197,18 @@ body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.45 Inte
 .node .port.in.a { top: 36%; }
 .node .port.in.b { top: 64%; }
 
-/* --- Panel -------------------------------------------------------------- */
-.panel { background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 18px; align-self: start; display: flex; flex-direction: column; gap: 12px; }
-.panel h2 { margin: 0; font: 600 16px/1.2 Fredoka, sans-serif; }
-.panel p { margin: -6px 0 0; }
-.panel label { display: flex; flex-direction: column; gap: 5px; font-weight: 600; font-size: 12.5px; }
-.panel label.toggle { flex-direction: row; gap: 8px; font-size: 13px; font-weight: 500; }
-.panel label output { font-weight: 500; color: var(--muted); }
-.panel input:not([type]), .panel select { font: 500 13px Inter, sans-serif; padding: 8px 10px; border-radius: 9px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); }
-.panel .row { display: flex; gap: 6px; }
-.panel .row .btn { flex: 1; }
-.panel hr { border: 0; border-top: 1px solid var(--line); margin: 4px 0; width: 100%; }
-.notes { margin: 0; padding-left: 18px; color: var(--muted); font-size: 12.5px; display: flex; flex-direction: column; gap: 6px; }
-.notes b { color: var(--ink); }
-
-/* Phones: thin gutters so the stage and timeline get the width. */
+/* Phones: thin gutters so the mock app gets the width. */
 @media (max-width: 600px) {
-  .top { padding: 12px 16px; gap: 10px; }
-  .top .seg { order: 3; width: 100%; }
-  .top .seg button { flex: 1; padding: 8px 6px; }
-  .top .seg button small { display: none; }
-  .top-actions { margin-left: 0; flex-wrap: wrap; gap: 10px 14px; }
-  .cases { padding: 0 16px 8px; }
-  .cases-label { display: none; }
-  .layout { padding: 4px 16px 24px; gap: 16px; }
-  .workspace { padding: 44px 12px 16px; border-radius: 14px; }
+  .hero { gap: 16px; padding-bottom: 28px; }
+  .helpers-bar { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .switch-label { display: none; }
+  .switch .seg { justify-self: stretch; }
+  .seg > button small { display: none; }
+  .helpers-actions { grid-column: 1; grid-row: auto; }
+  .helpers-layout { gap: 16px; }
+  .workspace { padding: 16px 12px; border-radius: var(--r-m); }
+  .scene-note { margin-bottom: 14px; font-size: 0.875rem; }
   .timeline { margin-top: 18px; }
 }
+
+.eyebrow { margin: 0; font: 700 0.8rem/1 var(--font-body); text-transform: uppercase; letter-spacing: 0.09em; color: var(--ink-2); }
