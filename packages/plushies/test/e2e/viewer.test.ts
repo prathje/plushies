@@ -55,7 +55,7 @@ test('a second dispose() leaves the other viewers drawing', async () => {
   expect(pixels).toBeGreaterThan(5000);
   expect(logs.filter(l => l.startsWith('error'))).toEqual([]);
   await page.close();
-}, 90_000);
+}, {timeout: 90_000, retry: 1});
 
 test('dispose() and stop() settle pending tweens', async () => {
   const {page} = await open();
@@ -74,7 +74,7 @@ test('dispose() and stop() settle pending tweens', async () => {
   });
   expect(result).toEqual(['settled', 'settled', 'settled']);
   await page.close();
-}, 90_000);
+}, {timeout: 90_000, retry: 1});
 
 test('restyle() merges into the current look', async () => {
   const {page} = await open();
@@ -90,7 +90,7 @@ test('restyle() merges into the current look', async () => {
   expect(look.turn).toBe(10);
   expect(look.color).toBe('#ff0000');
   await page.close();
-}, 90_000);
+}, {timeout: 90_000, retry: 1});
 
 test('modern CSS colours match their hex', async () => {
   const {page, logs} = await open();
@@ -117,7 +117,7 @@ test('modern CSS colours match their hex', async () => {
   }
   expect(logs.filter(l => /unknown colour/.test(l))).toEqual([]);
   await page.close();
-}, 120_000);
+}, {timeout: 120_000, retry: 1});
 
 test('invalid options warn and fall back; NaN poses are ignored', async () => {
   const {page, logs} = await open();
@@ -135,7 +135,7 @@ test('invalid options warn and fall back; NaN poses are ignored', async () => {
   expect(warnings.some(l => /unknown colour "not-a-colour"/.test(l))).toBe(true);
   expect(warnings.some(l => /lookX must be a finite number/.test(l))).toBe(true);
   await page.close();
-}, 90_000);
+}, {timeout: 90_000, retry: 1});
 
 test('chained steps keep their total duration', async () => {
   const {page} = await open();
@@ -164,7 +164,7 @@ test('chained steps keep their total duration', async () => {
   // frame gap ≤ 500 ms), so on a slower machine there's nothing to check.
   if (frame > 200) return console.warn(`chained steps: ${frame.toFixed(0)} ms frames, skipped`);
   expect(ms).toBeLessThan(1000 + Math.max(250, 1.5 * frame));
-}, 90_000);
+}, {timeout: 90_000, retry: 1});
 
 test('stop() halts a performance and the idle gesture where they are', async () => {
   const {page} = await open();
@@ -197,7 +197,7 @@ test('stop() halts a performance and the idle gesture where they are', async () 
   expect(result.lid).toBeGreaterThan(0.2);
   expect(result.lidAfter).toBe(result.lid);
   await page.close();
-}, 90_000);
+}, {timeout: 90_000, retry: 1});
 
 test('a step chained after a long stall starts now, not back when the stall began', async () => {
   const {page} = await open();
@@ -217,7 +217,7 @@ test('a step chained after a long stall starts now, not back when the stall bega
   // Chained from the first step's end, the 300 ms step would already be over on its first frame.
   expect(ms).toBeGreaterThan(250);
   await page.close();
-}, 90_000);
+}, {timeout: 90_000, retry: 1});
 
 test('restyle() with fur or a new fabric settles a running fur tween', async () => {
   const {page} = await open();
@@ -240,7 +240,7 @@ test('restyle() with fur or a new fabric settles a running fur tween', async () 
   expect(fur.given).toBe(0.3);
   expect(fur.fabric).toBe(fur.shaggy);
   await page.close();
-}, 90_000);
+}, {timeout: 90_000, retry: 1});
 
 test('translucent, bare-number hsl and `none` colours resolve like their opaque twins', async () => {
   const {page, logs} = await open();
@@ -271,4 +271,4 @@ test('translucent, bare-number hsl and `none` colours resolve like their opaque 
   }
   expect(logs.filter(l => /unknown colour/.test(l))).toEqual([]);
   await page.close();
-}, 120_000);
+}, {timeout: 120_000, retry: 1});

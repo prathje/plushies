@@ -9,15 +9,35 @@ export const ROOT = join(import.meta.dir, '../..');
  * a browser per page: SwiftShader Chromium has wedged after a few WebGL-heavy
  * pages (the cursor demo mounts three plushies at once), and in a shared
  * browser every test after that hung to its timeout. A fresh browser per
- * test costs a second and keeps one crash to one test.
+ * test costs a second and keeps one crash to one test. A wedged browser's
+ * close() may never return (and the next launch would wait on it), so after
+ * a few seconds it is killed by pid instead.
  */
 export async function launch() {
   const server = serveDir(ROOT);
   let browser: Browser | undefined;
+  let pid: number | undefined;
+  const stop = async () => {
+    const [b, p] = [browser, pid];
+    browser = pid = undefined;
+    if (!b) return;
+    await Promise.race([b.close().catch(() => {}), new Promise(r => setTimeout(r, 5_000))]);
+    if (p) {
+      try {
+        process.kill(p, 'SIGKILL');
+      } catch {
+        /* already gone */
+      }
+    }
+  };
   const fresh = async () => {
-    await browser?.close().catch(() => {});
+    await stop();
     // WebGL through SwiftShader: works headless on CI machines without a GPU.
-    browser = await chromium.launch({args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader']});
+    browser = await chromium.launch({args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--disable-dev-shm-usage'], timeout: 30_000});
+    const cdp = await browser.newBrowserCDPSession();
+    const {processInfo} = (await cdp.send('SystemInfo.getProcessInfo')) as {processInfo: {type: string; id: number}[]};
+    pid = processInfo.find(p => p.type === 'browser')?.id;
+    await cdp.detach().catch(() => {});
     return browser;
   };
   return {
@@ -36,7 +56,7 @@ export async function launch() {
       return {page, errors: () => errors.filter(e => !/fonts\.(googleapis|gstatic)|ERR_FAILED/.test(e))};
     },
     async close() {
-      await browser?.close().catch(() => {});
+      await stop();
       server.stop(true);
     },
   };

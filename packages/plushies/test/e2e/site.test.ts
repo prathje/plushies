@@ -33,7 +33,7 @@ test('renders the helpers, gallery and editor without errors', async () => {
   expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBe(0);
   expect(errors()).toEqual([]);
   await page.close();
-}, 180_000);
+}, {timeout: 150_000, retry: 1});
 
 test('editor controls change the code and the share link', async () => {
   const {page, errors} = await browser.page('/_site/#editor');
@@ -59,7 +59,7 @@ test('editor controls change the code and the share link', async () => {
   expect(await code(page)).toContain('createPlushie(THREE');
   expect(errors()).toEqual([]);
   await page.close();
-}, 180_000);
+}, {timeout: 150_000, retry: 1});
 
 test('a share link restores the plushie', async () => {
   const {page, errors} = await browser.page('/_site/?kind=ghost&color=7cc4f4&hat=crown&eyes=googly&lookX=0.4#editor');
@@ -69,7 +69,7 @@ test('a share link restores the plushie', async () => {
   for (const part of ["kind: 'ghost'", "color: '#7cc4f4'", "hat: 'crown'", "eyes: 'googly'", 'lookX: 0.4']) expect(text).toContain(part);
   expect(errors()).toEqual([]);
   await page.close();
-}, 180_000);
+}, {timeout: 150_000, retry: 1});
 
 test('gallery cards open in the editor', async () => {
   const {page, errors} = await browser.page('/_site/#gallery');
@@ -79,7 +79,7 @@ test('gallery cards open in the editor', async () => {
   expect(text).toContain("glasses: 'monocle'");
   expect(errors()).toEqual([]);
   await page.close();
-}, 180_000);
+}, {timeout: 150_000, retry: 1});
 
 test('phone layout has no sideways scroll', async () => {
   const {page, errors} = await browser.page('/_site/', {width: 390, height: 844});
@@ -97,7 +97,7 @@ test('phone layout has no sideways scroll', async () => {
   expect(await page.evaluate(() => document.documentElement.dataset.theme)).toBe('light');
   expect(errors()).toEqual([]);
   await page.close();
-}, 180_000);
+}, {timeout: 150_000, retry: 1});
 
 // --- The cursor demo -----------------------------------------------------------
 
@@ -116,7 +116,7 @@ test('every design: the helpers mount and get to work', async () => {
   }
   expect(errors()).toEqual([]);
   await page.close();
-}, 180_000);
+}, {timeout: 150_000, retry: 1});
 
 test('every use case: the helpers work in it', async () => {
   const {page, errors} = await browser.page('/_site/?scene=design', {width: 1300, height: 900});
@@ -135,7 +135,7 @@ test('every use case: the helpers work in it', async () => {
   }
   expect(errors()).toEqual([]);
   await page.close();
-}, 180_000);
+}, {timeout: 150_000, retry: 1});
 
 test('switching the design and the use case keeps the helpers', async () => {
   const {page, errors} = await browser.page('/_site/?kind=ghost&hat=crown#cursors', {width: 1300, height: 900});
@@ -156,7 +156,7 @@ test('switching the design and the use case keeps the helpers', async () => {
   expect(await page.locator('.shape-tile[title="ghost"]').getAttribute('aria-checked')).toBe('true');
   expect(errors()).toEqual([]);
   await page.close();
-}, 180_000);
+}, {timeout: 150_000, retry: 1});
 
 test('plushies are optional, per cursor', async () => {
   const {page, errors} = await browser.page('/_site/?design=live', {width: 1300, height: 900});
@@ -173,7 +173,7 @@ test('plushies are optional, per cursor', async () => {
   expect(await page.$$eval('.pc-cursor.pc-bare', els => els.map(e => (e as HTMLElement).dataset.cursor))).toEqual(['Biscuit']);
   expect(errors()).toEqual([]);
   await page.close();
-}, 180_000);
+}, {timeout: 150_000, retry: 1});
 
 test('one helper follows the pointer around the page', async () => {
   const {page, errors} = await browser.page('/_site/?design=live', {width: 1300, height: 900});
@@ -220,4 +220,4 @@ test('one helper follows the pointer around the page', async () => {
   expect(await page.evaluate(() => (window as any).helpers.map((h: any) => h.manual))).toEqual([false, false, false]);
   expect(errors()).toEqual([]);
   await page.close();
-}, 180_000);
+}, {timeout: 150_000, retry: 1});
