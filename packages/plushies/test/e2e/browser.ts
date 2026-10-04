@@ -18,7 +18,13 @@ export interface Chromium {
  * waiting on it hung to its timeout without a word.
  */
 export async function launchChromium(): Promise<Chromium> {
-  const browser = await chromium.launch({args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--disable-dev-shm-usage'], timeout: 30_000});
+  const options = {args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--disable-dev-shm-usage'], timeout: 30_000};
+  // A launch right after a browser went down has failed to connect on the runner: give it a second try.
+  const browser = await chromium.launch(options).catch(async error => {
+    console.warn(`[e2e] Chromium did not launch (${String(error).split('\n')[0]}); trying again`);
+    await new Promise(r => setTimeout(r, 2_000));
+    return chromium.launch(options);
+  });
   let pid: number | undefined;
   try {
     const cdp = await browser.newBrowserCDPSession();
@@ -31,13 +37,19 @@ export async function launchChromium(): Promise<Chromium> {
   return {
     browser,
     async stop() {
-      await Promise.race([browser.close().catch(() => {}), new Promise(r => setTimeout(r, 5_000))]);
-      if (!pid) return;
+      const closed = await Promise.race([browser.close().then(() => true, () => true), new Promise<false>(r => setTimeout(() => r(false), 5_000))]);
+      if (closed) return;
+      // Wedged. Its children (GPU, renderers) outlive a SIGKILL to the browser
+      // alone and would starve the next launch: take down every SwiftShader
+      // Chromium (ours are the only ones).
+      console.warn(`[e2e] Chromium close() hung; killing it${pid ? ` (pid ${pid})` : ''}`);
       try {
-        process.kill(pid, 'SIGKILL');
+        if (pid) process.kill(pid, 'SIGKILL');
       } catch {
         /* already gone */
       }
+      Bun.spawnSync(['pkill', '-KILL', '-f', '--', '--use-angle=swiftshader']);
+      await new Promise(r => setTimeout(r, 1_000));
     },
   };
 }
