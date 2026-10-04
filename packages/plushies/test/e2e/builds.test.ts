@@ -6,7 +6,8 @@ let browser: Awaited<ReturnType<typeof launch>>;
 beforeAll(async () => {
   browser = await launch();
 });
-afterAll(() => browser?.close());
+// A hung browser takes a few seconds to kill: more than a hook's default 5 s.
+afterAll(() => browser?.close(), 30_000);
 
 describe.each([
   ['script tag, three bundled', '/test/e2e/fixtures/global.html'],

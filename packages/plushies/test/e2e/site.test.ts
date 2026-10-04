@@ -11,7 +11,8 @@ let browser: Awaited<ReturnType<typeof launch>>;
 beforeAll(async () => {
   browser = await launch();
 });
-afterAll(() => browser?.close());
+// A hung browser takes a few seconds to kill: more than a hook's default 5 s.
+afterAll(() => browser?.close(), 30_000);
 
 const code = (page: import('playwright').Page) => page.locator('#code-out').textContent();
 
@@ -211,12 +212,14 @@ test('one helper follows the pointer around the page', async () => {
   // Scrolling alone keeps it beside the pointer.
   await page.mouse.wheel(0, -200);
   await beside('Biscuit', 720, 420);
-  // Another follower: Biscuit goes back to its script.
-  await page.click('#follow [data-follow=Moss]', {force: true});
+  // Another follower: Biscuit goes back to its script. (The switch is scrolled
+  // off the top, under the sticky nav: press it from script rather than scroll back.)
+  const press = (follow: string) => page.evaluate(follow => document.querySelector<HTMLElement>(`#follow [data-follow="${follow}"]`)!.click(), follow);
+  await press('Moss');
   await page.mouse.move(640, 460);
   await beside('Moss', 640, 460);
   expect(await page.evaluate(() => (window as any).helpers.map((h: any) => h.manual))).toEqual([false, false, true]);
-  await page.click('#follow [data-follow=""]', {force: true});
+  await press('');
   expect(await page.evaluate(() => (window as any).helpers.map((h: any) => h.manual))).toEqual([false, false, false]);
   expect(errors()).toEqual([]);
   await page.close();
