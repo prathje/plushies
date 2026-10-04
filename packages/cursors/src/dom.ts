@@ -66,8 +66,16 @@ export function morph(box: HTMLElement, change: () => void, ms = 420) {
   box.style.width = '';
   box.style.height = '';
   change();
+  // The new content may start its own transitions (padding, font size);
+  // measure the size they end at, then put them back where they were.
+  const running = (box.getAnimations?.({subtree: true}) ?? []).filter(
+    a => typeof CSSTransition !== 'undefined' && a instanceof CSSTransition && !(a.effect instanceof KeyframeEffect && a.effect.target === box && (a.transitionProperty === 'width' || a.transitionProperty === 'height')),
+  );
+  const at = running.map(a => a.currentTime ?? 0);
+  for (const a of running) a.currentTime = a.effect?.getComputedTiming().endTime ?? 0;
   const w1 = box.offsetWidth;
   const h1 = box.offsetHeight;
+  running.forEach((a, i) => (a.currentTime = at[i]));
   if (!w0 || !h0 || (Math.abs(w0 - w1) < 0.5 && Math.abs(h0 - h1) < 0.5)) return;
   box.style.width = `${w0}px`;
   box.style.height = `${h0}px`;
