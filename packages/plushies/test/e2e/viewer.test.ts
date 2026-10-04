@@ -1,6 +1,7 @@
 /** The drop-in viewer's lifecycle and look handling, from source, in a real browser. */
 import {afterAll, afterEach, beforeAll, expect, test} from 'bun:test';
-import {chromium, type Browser, type Page} from 'playwright';
+import type {Page} from 'playwright';
+import {launchChromium, type Chromium} from './browser';
 import lab from './fixtures/viewer-lab.html';
 
 let server: ReturnType<typeof Bun.serve>;
@@ -8,19 +9,21 @@ beforeAll(() => {
   server = Bun.serve({port: 0, routes: {'/': lab}});
 });
 // One browser per test: on a small CI runner, SwiftShader Chromium crashed a few
-// WebGL-heavy tests into a shared browser, failing whichever test came next.
-let browser: Browser | undefined;
+// WebGL-heavy tests into a shared browser, failing whichever test came next
+// (and a wedged one is killed, so it can't hang the test after it either).
+let chrome: Chromium | undefined;
 afterEach(async () => {
-  await browser?.close().catch(() => {});
-  browser = undefined;
+  const c = chrome;
+  chrome = undefined;
+  await c?.stop();
 });
 afterAll(() => {
   server?.stop(true);
 });
 
 async function open(): Promise<{page: Page; logs: string[]}> {
-  browser = await chromium.launch({args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader']});
-  const page = await browser.newPage();
+  chrome = await launchChromium();
+  const page = await chrome.browser.newPage();
   page.setDefaultTimeout(60_000);
   const logs: string[] = [];
   page.on('pageerror', e => logs.push(`error: ${e.message}`));

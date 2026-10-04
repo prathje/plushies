@@ -4,41 +4,63 @@ import {serveDir} from './serve';
 
 export const ROOT = join(import.meta.dir, '../..');
 
+/** A Chromium that can be killed: its close() may never return on a wedged SwiftShader browser. */
+export interface Chromium {
+  browser: Browser;
+  /** close(), or after five seconds SIGKILL by pid. */
+  stop(): Promise<void>;
+}
+
+/**
+ * Launch Chromium with WebGL through SwiftShader (works headless on CI
+ * machines without a GPU), noting its pid so a wedged one can be killed:
+ * on the CI runner a browser's close() has hung forever, and everything
+ * waiting on it hung to its timeout without a word.
+ */
+export async function launchChromium(): Promise<Chromium> {
+  const browser = await chromium.launch({args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--disable-dev-shm-usage'], timeout: 30_000});
+  let pid: number | undefined;
+  try {
+    const cdp = await browser.newBrowserCDPSession();
+    const {processInfo} = (await cdp.send('SystemInfo.getProcessInfo')) as {processInfo: {type: string; id: number}[]};
+    pid = processInfo.find(p => p.type === 'browser')?.id;
+    await cdp.detach().catch(() => {});
+  } catch {
+    /* no pid: close() will have to do */
+  }
+  return {
+    browser,
+    async stop() {
+      await Promise.race([browser.close().catch(() => {}), new Promise(r => setTimeout(r, 5_000))]);
+      if (!pid) return;
+      try {
+        process.kill(pid, 'SIGKILL');
+      } catch {
+        /* already gone */
+      }
+    },
+  };
+}
+
 /**
  * A static server over the repo root (dist/, _site/, node_modules/three) and
  * a browser per page: SwiftShader Chromium has wedged after a few WebGL-heavy
  * pages (the cursor demo mounts three plushies at once), and in a shared
  * browser every test after that hung to its timeout. A fresh browser per
- * test costs a second and keeps one crash to one test. A wedged browser's
- * close() may never return (and the next launch would wait on it), so after
- * a few seconds it is killed by pid instead.
+ * test costs a second and keeps one crash to one test.
  */
 export async function launch() {
   const server = serveDir(ROOT);
-  let browser: Browser | undefined;
-  let pid: number | undefined;
+  let chrome: Chromium | undefined;
   const stop = async () => {
-    const [b, p] = [browser, pid];
-    browser = pid = undefined;
-    if (!b) return;
-    await Promise.race([b.close().catch(() => {}), new Promise(r => setTimeout(r, 5_000))]);
-    if (p) {
-      try {
-        process.kill(p, 'SIGKILL');
-      } catch {
-        /* already gone */
-      }
-    }
+    const c = chrome;
+    chrome = undefined;
+    await c?.stop();
   };
   const fresh = async () => {
     await stop();
-    // WebGL through SwiftShader: works headless on CI machines without a GPU.
-    browser = await chromium.launch({args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--disable-dev-shm-usage'], timeout: 30_000});
-    const cdp = await browser.newBrowserCDPSession();
-    const {processInfo} = (await cdp.send('SystemInfo.getProcessInfo')) as {processInfo: {type: string; id: number}[]};
-    pid = processInfo.find(p => p.type === 'browser')?.id;
-    await cdp.detach().catch(() => {});
-    return browser;
+    chrome = await launchChromium();
+    return chrome.browser;
   };
   return {
     url: (path: string) => new URL(path, server.url).href,
