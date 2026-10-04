@@ -43,6 +43,21 @@ describe.each([
   }, 180_000);
 });
 
+test('the script tag build exposes THREE and hasSoftwareWebGL on window.Plushies', async () => {
+  const {page, errors} = await browser.page('/test/e2e/fixtures/global.html');
+  await page.waitForFunction(() => (window as any).view?.canvas?.isConnected, null, {timeout: 20_000});
+  const result = await page.evaluate(() => {
+    const P = (window as any).Plushies;
+    return {three: typeof P.THREE?.WebGLRenderer, software: P.hasSoftwareWebGL(), shells: P.MAX_FUR_SHELLS};
+  });
+  expect(result.three).toBe('function');
+  // Headless Chromium renders through SwiftShader.
+  expect(result.software).toBe(true);
+  expect(result.shells).toBe(16);
+  expect(errors()).toEqual([]);
+  await page.close();
+}, 180_000);
+
 describe('shared renderer', () => {
   test('more viewers than the browser has WebGL contexts all draw', async () => {
     const {page, errors} = await browser.page('/test/e2e/fixtures/many.html');

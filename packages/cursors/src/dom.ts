@@ -58,13 +58,16 @@ export function reducedMotion(): boolean {
  * new content needs. The box clips (`overflow: hidden`) and transitions
  * `width` and `height`; its content should size itself (`width: max-content`)
  * so text doesn't rewrap mid-way. Interrupting a morph starts the next one
- * from wherever the box is now.
+ * from wherever the box is now. While it runs, `finalSize` reports where it
+ * ends (the box's own size is mid-way).
  */
 export function morph(box: HTMLElement, change: () => void, ms = 420) {
   const w0 = box.offsetWidth;
   const h0 = box.offsetHeight;
   box.style.width = '';
   box.style.height = '';
+  delete box.dataset.morphW;
+  delete box.dataset.morphH;
   change();
   // The new content may start its own transitions (padding, font size);
   // measure the size they end at, then put them back where they were.
@@ -82,6 +85,8 @@ export function morph(box: HTMLElement, change: () => void, ms = 420) {
   void box.offsetWidth;
   box.style.width = `${w1}px`;
   box.style.height = `${h1}px`;
+  box.dataset.morphW = String(w1);
+  box.dataset.morphH = String(h1);
   const token = String(Math.random());
   box.dataset.morph = token;
   setTimeout(() => {
@@ -89,7 +94,19 @@ export function morph(box: HTMLElement, change: () => void, ms = 420) {
     box.style.width = '';
     box.style.height = '';
     delete box.dataset.morph;
+    delete box.dataset.morphW;
+    delete box.dataset.morphH;
   }, ms + 60);
+}
+
+/**
+ * The size a morphing box ends at — its own size otherwise. Placement reads
+ * this: a label must flip for the room it will take, not the room it has
+ * part-way through growing.
+ */
+export function finalSize(box: HTMLElement): {width: number; height: number} {
+  const {morphW, morphH} = box.dataset;
+  return {width: morphW ? Number(morphW) : box.offsetWidth, height: morphH ? Number(morphH) : box.offsetHeight};
 }
 
 /** Replace a line's text: the old one slides up and fades while the new one comes in from below. */

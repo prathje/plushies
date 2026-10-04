@@ -31,7 +31,7 @@ const view = mountPlushie(document.querySelector('#hero'), THREE, {
   {
     id: 'script',
     label: 'Script tag',
-    intro: 'No build step and no three.js of your own: the global build has three bundled in and puts everything on window.Plushies. (CDN links work once the package is published to npm.)',
+    intro: 'No build step and no three.js of your own: the global build has three bundled in and puts everything on window.Plushies.',
     blocks: [
       [
         'html',
@@ -50,7 +50,7 @@ const view = mountPlushie(document.querySelector('#hero'), THREE, {
   {
     id: 'esm',
     label: 'ES modules',
-    intro: 'Modules straight from a CDN (once the package is published to npm). Map three yourself and use the small build, or import the bundled one that brings its own three.',
+    intro: 'Modules straight from a CDN. Map three yourself and use the small build, or import the bundled one that brings its own three.',
     blocks: [
       [
         'html',
@@ -129,7 +129,7 @@ export function renderDocs(root: HTMLElement) {
 
   const sizes = document.createElement('div');
   sizes.className = 'callout';
-  sizes.innerHTML = `<p><strong>three external or bundled?</strong> The core is about <strong>22 kB</strong> gzipped and uses the three.js you pass in (r160 or newer). The bundled builds (<code>plushies/bundled</code>, <code>plushies.global.js</code>) carry their own three and weigh about <strong>200 kB</strong> gzipped. If your page already has three, use the small one — two copies of three don't mix.</p>`;
+  sizes.innerHTML = `<p><strong>three external or bundled?</strong> The core is about <strong>26 kB</strong> gzipped (<code>index.js</code> 22 + <code>viewer.js</code> 4.5) and uses the three.js you pass in (r160 or newer). The bundled builds (<code>plushies/bundled</code>, <code>plushies.global.js</code>) carry their own three and weigh about <strong>210 kB</strong> gzipped. If your page already has three, use the small one — two copies of three don't mix.</p>`;
 
   const scene = document.createElement('div');
   scene.className = 'doc-card';

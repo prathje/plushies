@@ -6,7 +6,7 @@ Floating [plushies](../plushies) cursors for AI helpers. Each helper is a small 
 import * as THREE from 'three';
 import {createPlushieCursor} from '@plushies/cursors';
 
-const editor = document.querySelector<HTMLElement>('#editor')!;
+const editor = document.querySelector<HTMLElement>('#editor')!; // a wrapper around the editor, not a contenteditable
 const headline = document.querySelector('#headline')!;
 
 const pip = createPlushieCursor(THREE, {
@@ -25,6 +25,41 @@ await pip.done('Headline is punchier');
 glow.clear(0.8);
 ```
 
+## Install
+
+```sh
+npm i @plushies/cursors plushies three
+npm i -D @types/three   # TypeScript
+```
+
+`three` is a peer dependency: you install it and pass your copy to `createPlushieCursor`, so there is only one copy of three per page (the package imports nothing from three itself). The package is ESM-only; its `default` export condition lets Node 22's `require(esm)` load it from CommonJS code (Jest, ts-node). Importing it has no side effects: nothing touches the DOM until you create a cursor, so the import is fine in code that also runs on a server. `createPlushieCursor` itself needs a browser; without `document` it throws `@plushies/cursors: createPlushieCursor needs a browser (document is not defined). Call it after mount, e.g. in a 'use client' component's effect.` (see [React](#react) below).
+
+### Without a bundler
+
+The package imports `plushies/viewer` by its bare name, so a page without a bundler needs an import map for `three`, `plushies`, `plushies/viewer` and `@plushies/cursors`. Pin the exact version: this is a prerelease, and a range like `@0.1` does not match it. esm.sh (`https://esm.sh/@plushies/cursors@0.1.0-alpha.1`) resolves the package's imports by itself and works too.
+
+```html
+<script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.186.0/build/three.module.js",
+      "plushies": "https://cdn.jsdelivr.net/npm/plushies@0.1.0-alpha.1/dist/index.js",
+      "plushies/viewer": "https://cdn.jsdelivr.net/npm/plushies@0.1.0-alpha.1/dist/viewer.js",
+      "@plushies/cursors": "https://cdn.jsdelivr.net/npm/@plushies/cursors@0.1.0-alpha.1/dist/index.js"
+    }
+  }
+</script>
+<script type="module">
+  import * as THREE from 'three';
+  import {createPlushieCursor} from '@plushies/cursors';
+
+  const pip = createPlushieCursor(THREE, {name: 'Pip', look: {kind: 'star', color: '#f5c518'}});
+  await pip.pointAt(document.querySelector('#headline'));
+</script>
+```
+
+Pointer-only cursors need no three at all: leave `three` out of the map and call `createPlushieCursor(null, {name: 'Agent'})`. A page that already uses the plushies global build (`plushies.global.js`) has its three on `Plushies.THREE`: pass that (`createPlushieCursor(Plushies.THREE, …)`) instead of loading three a second time.
+
 ## Designs
 
 | | |
@@ -33,7 +68,7 @@ glow.clear(0.8);
 | `buddy` | The plushie floats like a balloon on a string tied to a felt pointer. It trails behind and sways as it moves. Its name is a sewn-on fabric tag. Its status is a speech bubble typed out letter by letter, with thinking dots and a stitched progress seam. |
 | `island` | A classic pointer with a dark glass capsule. The plushie sits on a round seat ringed by its progress. The capsule grows into a status card (a shimmering line, a step chip and a detail line) and shrinks back to a name pill when the helper is done. |
 
-Switch a cursor's design at any time with `cursor.setDesign('island')`.
+Switch a cursor's design at any time with `cursor.setDesign('island')`. `CURSOR_DESIGNS` lists the three.
 
 ## Without a plushie
 
@@ -43,20 +78,25 @@ The plushie is optional for each cursor:
 - **`cursor.setPlushie(on)`** turns it off or back on later.
 - **`null` for `three`** (`createPlushieCursor(null, {name: 'Agent'})`) leaves out three.js entirely.
 
+The plushie needs WebGL and is slow on a software WebGL context (headless browsers, VMs, blocklisted GPUs; see the [plushies performance notes](../plushies#performance)). `hasSoftwareWebGL()` from `plushies/viewer` tells you, so you can pass `plushie: false` there; the plushie's viewer picks `quality: 'low'` by itself on software GL, and `look: {quality: 'low'}` forces it everywhere.
+
 ## Options
+
+`PlushieCursorOptions`:
 
 | option | |
 |---|---|
 | `name` | Shown on the label. |
-| `look` | The plushie: any [plushies](../plushies) option (`kind`, `color`, `eyes`, `hat`, …). |
+| `look` | The plushie: any [plushies](../plushies) viewer option (`kind`, `color`, `eyes`, `hat`, `quality`, …). Its type, `CursorLook`, is `ViewerOptions` without `idle` and `followPointer`: the cursor drives those (`idle` is a cursor option, below). |
 | `color` | The accent for the pointer, label and highlight, any CSS colour. Defaults to the plushie's colour; with neither, each new cursor takes the next colour from a palette (and its plushie wears it too). |
 | `design` | `'live'` (default), `'buddy'` or `'island'`. |
-| `container` | Where the cursor lives (default: the page). Positions are in its pixels. |
+| `container` | Where the cursor lives (default: `document.body`, so positions are page pixels). Positions are in its pixels. The cursor layer is `position: absolute` inside it; a container with `position: static` gets `position: relative` set on it. Pass an element *around* your content, never a `contenteditable` (an editor's own DOM observer removes the layer again; the package warns once when you do). |
 | `x`, `y` | Where it starts (default: the container's centre). |
 | `speed` | How fast the pointer travels, relative to the design's own pace; 2 halves move times (default: 0.75). Change it with `setSpeed(speed)`. |
 | `idle` | The plushie blinks, breathes and glances around between moves (default: true). |
 | `plushie` | Float a plushie with the pointer (default: true). |
 | `zIndex` | Stacking of the container's cursor layer (default: 2147483000). |
+| `onLost` | `(target) => void`, called whenever a target the cursor follows goes away: its element left the document, or its function returned `null` or threw. Called for a move still in flight (which also resolves `'lost'`) and for a target it had arrived at. Not called for `pointAt(null)`, `release()`, a new move or `dispose()`. |
 
 ## API
 
@@ -65,49 +105,51 @@ Moves:
 - **`moveTo(x, y)`**: glides to a point in container pixels.
 - **`pointAt(target)`**: glides to the nearest corner or left/right side of the target that leaves room for its label and isn't taken by another cursor (the top and bottom middles, where the plushie would float over the target, only when none is free), and keeps following the target as it moves. `release()` stops following.
 
-Both resolve with how the move ended:
+Both resolve with how the move ended (`MoveResult`):
 
 | result | |
 |---|---|
-| `'arrived'` | It got there (a `pointAt` cursor keeps following afterwards). |
+| `'arrived'` | It got there (a `pointAt` cursor keeps following afterwards). Also for a target outside the container's visible area, scrolled away or clipped: the cursor parks at the edge, pointing its way, and resolves `'arrived'` all the same; if you need to know, check the element's own visibility. |
 | `'superseded'` | A newer `moveTo` or `pointAt` took over before it arrived. |
-| `'lost'` | The target went away: removed from the page, its function returned `null` or threw, or `pointAt(null)` (as `querySelector` gives you). The cursor stops following and stays put; `pointAt(null)` also supersedes a move in flight. Also for a `moveTo` with non-numbers or a `pointAt` with something that isn't a target (a selector string, say), which are ignored with a warning. |
+| `'lost'` | The target went away during the move: removed from the page, its function returned `null` or threw, or `pointAt(null)` (as `querySelector` gives you). The cursor stops following and stays put; `pointAt(null)` also supersedes a move in flight. Also for a `moveTo` with non-numbers or a `pointAt` with something that isn't a target (a selector string, say), which are ignored with a warning (once per distinct message). |
 | `'disposed'` | The cursor was disposed. |
+
+`'lost'` is only how a *move* ends. A target that goes away after the cursor arrived leaves the cursor where it is, no longer following; the `onLost` option is the signal for both cases, and `cursor.target` (read-only: the target it follows, or `null`) tells you at any time whether it still follows something.
 
 Status:
 
-- **`status(text | {text, detail, progress, step, busy})`**: shows what the helper is working on; `null` or `''` clears it. Any status call ends a `done` message still showing. `progress` is 0..1; `step: [n, m]` shows "n/m"; `busy: false` makes it a plain note.
+- **`status(text | {text, detail, progress, step, busy})`** (`CursorStatus`): shows what the helper is working on; `null` or `''` clears it. Any status call ends a `done` message still showing. `progress` is 0..1 (clamped); `step: [n, m]` shows "n/m"; `busy: false` makes it a plain note. Repeating a status with the same text and a new `progress` only moves the bar, so updating many times a second is fine.
 - **`progress(value, step?)`**: changes only the progress; with no status yet it starts a "Working…" one.
 - **`say(text, seconds = 2.6)`**: shows a one-off message over the status.
 - **`click()`**: the pointer dips, a ripple spreads from the tip and the plushie squishes. Resolves when the squish is over.
-- **`done(text = 'Done', seconds = 1.8)`**: clears the status, hops and shows the text with a check mark, then goes back to just the name. Resolves when the hop lands, before the message goes away.
+- **`done(text = 'Done', seconds = 1.8)`**: clears the status, hops and shows the text with a check mark, then goes back to just the name. Resolves when the hop lands, before the message goes away. Each call hops again, so call it once per finished task, not once per state update.
 
 The cursor that changed last is drawn on top of the others. Every status change is announced to screen readers through a polite live region.
 
 Highlights:
 
-- **`highlight(target, {busy, radius})`**: the editor's "working on this" mark, an overlay in the cursor's colour. While `busy` (the default) its tint breathes and a light runs round the border. It is separate from pointing, so you decide what glows and when. It returns `{update(target, options?), clear(delay?)}`; `clear` fades it out after `delay` seconds. Disposing the cursor removes its highlights.
+- **`highlight(target, {busy, radius})`**: the editor's "working on this" mark, an overlay in the cursor's colour. While `busy` (the default) its tint breathes and a light runs round the border. It is separate from pointing, so you decide what glows and when. It returns a `Highlight`, `{update(target, options?), clear(delay?)}`; `clear` fades it out after `delay` seconds. A highlight lives until you clear it, with two exceptions: disposing the cursor removes its highlights, and a highlight whose element target leaves the document fades out and removes itself (a function target that returns `null` only hides the highlight; it comes back when the function returns a box again).
 
 Changing a cursor:
 
 - **`setDesign(design)`**, **`setName(name)`**, **`setSpeed(speed)`**, **`setPlushie(on)`**.
 - **`show(on)`**: hides or shows the cursor; hidden, it stops animating.
 - **`setColor(color)`**: a new accent colour.
-- **`setLook(look)`**: changes the plushie's look, merged into the current one.
-- **`dispose()`**: removes the cursor and its highlights (and the layer, once its last cursor is gone). Pending moves resolve `'disposed'`, pending `click`/`done` promises resolve, and later calls do nothing.
+- **`setLook(look)`**: changes the plushie's look, merged into the current one. It rebuilds the plushie, so call it when something changed, not on every render.
+- **`dispose()`**: removes the cursor and its highlights (and the layer, once its last cursor is gone; the window `resize`/`scroll` listeners go with the last cursor on the page). Pending moves resolve `'disposed'`, pending `click`/`done` promises resolve, and later calls do nothing.
 
-Read-only: `element` (the cursor's element), `design`, and `viewer`, the plushie's [viewer](../plushies) (`hop`, `squish`, `look`, `restyle`, …) or `null` without a plushie.
+Read-only: `element` (the cursor's element), `design`, `target` (what it follows, or `null`), and `viewer`, the plushie's [viewer](../plushies) (`hop`, `squish`, `look`, `restyle`, …) or `null` without a plushie.
 
-The plushie leans into its motion, turns toward where it's going, looks at what it points at and wobbles while it works. Movement uses springs, like the editor: the pointer eases out of rest and lands without overshoot, and the plushie trails it on a softer spring, never more than a short leash behind. Near the edges of the container's visible area the cursor mirrors itself so its label stays on screen (with some slack so it doesn't flicker at the edge), and its tip stays inside that area: a cursor whose target scrolls away waits at the edge. Cursors in one container keep their labels off each other: the one that got there first keeps its spot. At a target, a cursor takes the clear spot it reaches by moving least and keeps it while it stays clear; at a point it hangs right and below where it can, else another way off the point. With no clear spot left, it takes the one that overlaps least. With `prefers-reduced-motion`, the plushie's idle loop, bob, sway and every CSS animation stop, and text appears at once.
+The plushie leans into its motion, turns toward where it's going, looks at what it points at and wobbles while it works. Movement uses springs, like the editor: the pointer eases out of rest and lands without overshoot, and the plushie trails it on a softer spring, never more than a short leash behind. Near the edges of the container's visible area the cursor mirrors itself so its label stays on screen (with some slack so it doesn't flicker at the edge), and it re-fits when the label grows: a status bubble that would leave the visible area mirrors the cursor too. Its tip stays inside that area: a cursor whose target scrolls away waits at the edge. A nested scrolling box (`overflow: auto` or `scroll`) inside the container clips the same way: a target scrolled out of it has the cursor waiting at the scroller's edge, not floating over its border. Cursors in one container keep their labels off each other: the one that got there first keeps its spot. At a target, a cursor takes the clear spot it reaches by moving least and keeps it while it stays clear; at a point it hangs right and below where it can, else another way off the point. With three or more cursors on one small target they spread over the spots there are; with no clear spot left, a cursor takes the one that overlaps least. With `prefers-reduced-motion`, the plushie's idle loop, bob, sway and every CSS animation stop, and text appears at once.
 
-All cursors share one `requestAnimationFrame` loop, which stops when nothing is animating: a cursor at rest costs nothing. Bobbing designs (`'live'`, and `'buddy'` with its plushie) and a busy plushie animate while they're visible, and a cursor following a target reads its box every frame; hidden cursors (`show(false)`), containers scrolled out of view and background tabs don't. Window resizes, scrolls and the container resizing wake resting cursors; a layout change they can't see (a new CSS transform on an ancestor) shows at the cursor's next call.
+All cursors share one `requestAnimationFrame` loop, which stops when nothing is animating: a cursor at rest costs nothing, unless its design bobs or its plushie idles. Bobbing designs (`'live'`, and `'buddy'` with its plushie), a plushie with `idle` on and a busy plushie animate while they're visible, and a cursor following a target reads its box every frame; hidden cursors (`show(false)`), containers scrolled out of view and background tabs don't. Pass `idle: false` or `plushie: false` where that per-frame work matters (weak machines, many cursors). Window resizes, scrolls and the container resizing wake resting cursors; a layout change they can't see (a new CSS transform on an ancestor) shows at the cursor's next call. The first plushie on a page costs about 100 ms on the main thread (shaders and textures); create cursors ahead of the moment they are needed where you can.
 
 ## Targets: HTML or canvas
 
-A target can be any of these:
+A target (`Target`) can be any of these:
 
-- a DOM element, or anything with `getBoundingClientRect()` returning viewport pixels;
-- a box in container pixels, either `{left, top, width, height}` or `{x, y, width, height}`;
+- a DOM element, or anything with `getBoundingClientRect()` returning viewport pixels (a `VirtualElement`; the type is just that one method, so a plain object with it is a target, no cast needed: `{getBoundingClientRect: () => view.coordsAtPos(pos, -1)}` in a ProseMirror editor, read again every frame);
+- a box in container pixels (`Box`), either `{left, top, width, height}` or `{x, y, width, height}`;
 - a function that returns such a box (or `null`) every frame.
 
 Selector strings aren't targets: pass `document.querySelector(…)`.
@@ -129,15 +171,54 @@ paintHighlight(ctx, shape.bounds(), '#7c3aed', {busy: true});
 paintHighlight(ctx, shape.corners(), '#7c3aed', {radius: 4});
 ```
 
-`fromCanvas` maps onto the canvas's content box, so borders, padding and CSS transforms on the canvas are fine.
+`fromCanvas` maps onto the canvas's content box, so borders, padding and CSS transforms on the canvas are fine. `fromCanvas` takes a `CanvasBox` (or a function returning one); `paintHighlight`'s options (`PaintHighlightOptions`) are `busy`, `radius`, `lineWidth` (default 2) and `now`, the timestamp for its animation (default `performance.now()`).
+
+Types, all from `@plushies/cursors`: `PlushieCursorOptions`, `CursorLook`, `CursorDesign`, `CursorStatus`, `PlushieCursor`, `Target`, `Box`, `VirtualElement`, `MoveResult`, `Highlight`, `HighlightOptions`, `CanvasBox` and `PaintHighlightOptions`.
+
+## React
+
+Keep one cursor per agent id in a ref (a `Map`), create it once the container element exists, turn state changes into calls, and dispose on unmount:
+
+```tsx
+'use client';
+
+import {useEffect, useRef} from 'react';
+import * as THREE from 'three';
+import {createPlushieCursor, type PlushieCursor} from '@plushies/cursors';
+
+type Agent = {id: string; name: string; target: HTMLElement | null; status: string | null; progress?: number};
+
+export function Agents({agents, container}: {agents: Agent[]; container: HTMLElement | null}) {
+  const cursors = useRef(new Map<string, PlushieCursor>());
+
+  useEffect(() => {
+    if (!container) return;
+    const live = cursors.current;
+    for (const a of agents) {
+      let c = live.get(a.id);
+      if (!c) live.set(a.id, (c = createPlushieCursor(THREE, {name: a.name, container})));
+      if (c.target !== a.target) void c.pointAt(a.target); // only when it changed: a repeat restarts the move
+      c.status(a.status ? {text: a.status, progress: a.progress} : null);
+    }
+    for (const [id, c] of live) if (!agents.some(a => a.id === id)) (c.dispose(), live.delete(id));
+  }, [agents, container]);
+
+  useEffect(() => () => { for (const c of cursors.current.values()) c.dispose(); cursors.current.clear(); }, []);
+  return null;
+}
+```
+
+Get `container` from a callback ref or state, so the effect runs once the element is there. Compare before you call: `pointAt` on the same element again restarts the move (the first resolves `'superseded'`), `status` with identical content still re-fits the box, and `done` hops every time. StrictMode's mount, dispose, mount is safe. In Next.js a `'use client'` component is all it takes; `next/dynamic` is not needed, and importing the package in a server component (types, `CURSOR_DESIGNS`) is fine.
 
 ## Develop
 
 ```sh
-bun run test       # unit tests + browser tests of the library (Playwright)
-bun run build      # dist/index.js and types
+bun run test          # unit tests + browser tests of the library (Playwright)
+bun run test:unit     # just the unit tests
+bun run test:browser  # just the browser tests (needs Playwright's Chromium)
+bun run build         # dist/index.js and types
 ```
 
-The demo opens the plushies site (`bun run site:dev` in `packages/plushies`, http://localhost:4517): three helpers take turns working in a mock app, and a "Use case" switch picks which one: a video editor (an HTML slide plus a timeline drawn on a canvas), a design file, a website, a spreadsheet, a document or a node-based render pipeline. Each lives in `packages/plushies/site/scenes/` as a list of tasks (a target, a glow, a few steps, a change to the page); `site/helpers.ts` runs them. The design switch applies to all of them, the playground lets you take over one helper, and "Follow me" has one of them trail your pointer around the whole page (the cursors live on the page, not in the mock app).
+The demo opens the plushies site (`bun run site:dev` in `packages/plushies`, http://localhost:4517): three helpers take turns working in a mock app, and a "Use case" switch picks which one: a video editor (an HTML slide plus a timeline drawn on a canvas), a design file, a website, a spreadsheet, a document or a node-based render pipeline. Each lives in `packages/plushies/site/scenes/` as a list of tasks (a target, a glow, a few steps, a change to the page); `site/helpers.ts` runs them (`work()` there is the full call sequence for one task). The design switch applies to all of them, the playground lets you take over one helper, and "Follow me" has one of them trail your pointer around the whole page (the cursors live on the page, not in the mock app).
 
 This package lives in the `plushies` monorepo; run `bun install` at the repo root and the commands above in `packages/cursors`. `plushies` is a workspace dependency (`workspace:*`), which `bun publish` replaces with its version.

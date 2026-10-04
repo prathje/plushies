@@ -4,8 +4,8 @@
  * fabric tag; what it's doing comes as a speech bubble typed out letter by
  * letter, with thinking dots while it works and a stitched progress seam.
  */
-import type {CursorView, Design} from '../design';
-import {CHECK_ICON, clearText, el, injectStyle, morph, roundedPath, svg, typeText, type StyleRoot} from '../dom';
+import type {CursorView, Design} from '../design.js';
+import {CHECK_ICON, clearText, el, finalSize, injectStyle, morph, roundedPath, svg, typeText, type StyleRoot} from '../dom.js';
 
 const SIZE = 66;
 const ARROW = roundedPath([
@@ -109,16 +109,17 @@ export function buddyDesign(styles: StyleRoot): Design {
     bare: {anchor: {x: 22, y: -6}, motion: {body: 14, damping: 0.8, bob: 0, leash: 12}},
     room(bare) {
       const open = bubble.classList.contains('is-open');
+      const {width, height} = finalSize(box);
       if (bare) {
         return {
-          x: 22 + Math.max(6 + tag.offsetWidth, open ? 28 + box.offsetWidth : 0) + 10,
-          y: 6 + (open ? 6 + box.offsetHeight : 0) + 8,
+          x: 22 + Math.max(6 + tag.offsetWidth, open ? 28 + width : 0) + 10,
+          y: 6 + (open ? 6 + height : 0) + 8,
           up: 14 + tag.offsetHeight + 6,
         };
       }
       return {
-        x: 40 + Math.max(SIZE / 2 + tag.offsetWidth * 0.4, open ? 28 + box.offsetWidth : 0) + 10,
-        y: 58 + Math.max(SIZE / 2, open ? box.offsetHeight + 6 : 0) + 8,
+        x: 40 + Math.max(SIZE / 2 + tag.offsetWidth * 0.4, open ? 28 + width : 0) + 10,
+        y: 58 + Math.max(SIZE / 2, open ? height + 6 : 0) + 8,
         up: 4,
       };
     },

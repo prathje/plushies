@@ -65,14 +65,16 @@ await build('bundled', {
   naming: 'plushies.bundled.js',
   format: 'esm',
   minify: true,
-  sourcemap: 'linked',
+  // The maps stay out of the tarball (3 MB each; see package.json "files"), so
+  // the published files don't point at one: external leaves the comment off.
+  sourcemap: 'external',
 });
 await build('global', {
   entrypoints: [join(root, 'src/global.ts')],
   naming: 'plushies.global.js',
   format: 'iife',
   minify: true,
-  sourcemap: 'linked',
+  sourcemap: 'external',
 });
 
 await $`${join(root, 'node_modules/.bin/tsc')} -p ${join(root, 'tsconfig.build.json')}`;

@@ -14,6 +14,7 @@
  *   await view.hop();
  */
 import {
+  MAX_FUR_SHELLS,
   createPlushie,
   resetEnvironment,
   type Plushie,
@@ -32,6 +33,56 @@ export interface ViewerOptions extends ViewerLook, Partial<Omit<PlushiePose, 'wi
   followPointer?: boolean;
   /** Cap for the device pixel ratio. (default: 2) */
   maxPixelRatio?: number;
+  /**
+   * How much to draw. `'low'` caps the pixel ratio at 1 (`maxPixelRatio` still
+   * caps further), draws at most 6 fur shells (`furShells` still caps further)
+   * and turns antialiasing off on the shared renderer — two to three times the frame
+   * rate on software WebGL, where a plushie is otherwise a cliff. `'auto'` is
+   * `'low'` when `hasSoftwareWebGL()`, else `'full'`. The shared renderer is
+   * created by the first viewer mounted, so its antialiasing follows that one.
+   * (default: 'auto')
+   */
+  quality?: 'auto' | 'full' | 'low';
+}
+
+let softwareWebGL: boolean | undefined;
+
+/** Renderer strings of software rasterisers (Chromium, Mesa, Windows without a driver). */
+const SOFTWARE_GL = /SwiftShader|llvmpipe|softpipe|Software Rasterizer|Microsoft Basic Render/i;
+
+/**
+ * Whether this browser's WebGL runs in software (SwiftShader in headless
+ * Chromium, a VM, a GPU-blocklisted machine). Probed once: a context asked
+ * for with `failIfMajorPerformanceCaveat` is refused while a plain one is
+ * granted, or the plain one names a software rasteriser (headless Chromium
+ * grants the caveat context on SwiftShader). `false` without a `document`,
+ * and without any WebGL.
+ */
+export function hasSoftwareWebGL(): boolean {
+  if (softwareWebGL !== undefined) return softwareWebGL;
+  if (typeof document === 'undefined') return false;
+  // A canvas keeps its first context: one canvas per probe.
+  const probe = (options?: WebGLContextAttributes) => {
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = 1;
+    for (const kind of ['webgl2', 'webgl'] as const) {
+      const gl = canvas.getContext(kind, options) as WebGLRenderingContext | null;
+      if (gl) return gl;
+    }
+    return null;
+  };
+  const release = (gl: WebGLRenderingContext | null) => gl?.getExtension('WEBGL_lose_context')?.loseContext();
+  try {
+    const fast = probe({failIfMajorPerformanceCaveat: true});
+    const plain = fast ?? probe();
+    const debug = plain?.getExtension('WEBGL_debug_renderer_info');
+    const renderer = plain ? String(plain.getParameter(debug ? debug.UNMASKED_RENDERER_WEBGL : plain.RENDERER)) : '';
+    softwareWebGL = plain !== null && (fast === null || SOFTWARE_GL.test(renderer));
+    release(plain);
+  } catch {
+    softwareWebGL = false;
+  }
+  return softwareWebGL;
 }
 
 export type Easing = (t: number) => number;
@@ -45,8 +96,8 @@ export interface PlushieViewer {
   /** The current plushie (replaced by `restyle`). */
   readonly plushie: Plushie;
   readonly canvas: HTMLCanvasElement;
-  /** The current look: the options given at mount, merged with every `restyle`. */
-  readonly options: Readonly<ViewerLook>;
+  /** The current look: the options given at mount, merged with every `restyle` (with `color` and `fur` as given). */
+  readonly options: Readonly<ViewerLook & Partial<Pick<PlushiePose, 'color' | 'fur'>>>;
   /** Set pose values immediately. */
   set(pose: Partial<PlushiePose>): void;
   /** Tween numeric pose values. Resolves when done; a newer tween of the same key takes over. */
@@ -91,10 +142,10 @@ interface SharedRenderer {
 
 const SHARED = new WeakMap<ThreeModule, SharedRenderer>();
 
-function acquireRenderer(three: ThreeModule): SharedRenderer {
+function acquireRenderer(three: ThreeModule, antialias: boolean): SharedRenderer {
   let shared = SHARED.get(three);
   if (!shared) {
-    const renderer = new three.WebGLRenderer({antialias: true, alpha: true, premultipliedAlpha: true});
+    const renderer = new three.WebGLRenderer({antialias, alpha: true, premultipliedAlpha: true});
     renderer.setClearColor(0x000000, 0);
     // Sizes below are in device pixels.
     renderer.setPixelRatio(1);
@@ -166,16 +217,32 @@ function paint(
 
 const NUMERIC: Numeric[] = ['lookX', 'lookY', 'blink', 'squash', 'hop', 'lean', 'turn', 'float', 'fur'];
 const POSE_KEYS: (keyof PlushiePose)[] = [...NUMERIC, 'color', 'width', 'height', 'pixelRatio'];
+/** Pose fields that are part of the look too: `restyle` takes them and `options` reports them. */
+const LOOK_POSE_KEYS: (keyof PlushiePose)[] = ['color', 'fur'];
+/** Fur shells at `quality: 'low'`. */
+const LOW_FUR_SHELLS = 6;
 
 /** Mount a plushie filling `container` (give the container a size). */
 export function mountPlushie(container: HTMLElement, three: ThreeModule, options: ViewerOptions = {}): PlushieViewer {
-  const {idle = false, followPointer = false, maxPixelRatio = 2, ...rest} = options;
-  // Look and initial pose arrive together; keep the look to merge restyles into.
+  if (typeof document === 'undefined') {
+    throw new Error("plushies: mountPlushie needs a browser (document is not defined). Call it after mount, e.g. in a 'use client' component's effect.");
+  }
+  if (!(container instanceof Element)) throw new Error(`plushies: mountPlushie needs a container element (got ${String(container)})`);
+  const {idle = false, followPointer = false, quality = 'auto', maxPixelRatio: ratioCap = 2, ...rest} = options;
+  const low = quality === 'low' || (quality === 'auto' && hasSoftwareWebGL());
+  // Software WebGL fills pixels on the CPU: one device pixel per CSS pixel is all it can afford.
+  const maxPixelRatio = low ? Math.min(ratioCap, 1) : ratioCap;
+  // Look and initial pose arrive together; keep the look (colour and fur included) to merge restyles into.
   const look: Record<string, unknown> = {...rest};
-  for (const key of POSE_KEYS) delete look[key];
+  for (const key of POSE_KEYS) if (!LOOK_POSE_KEYS.includes(key)) delete look[key];
   delete look.renderer;
-  const shared = acquireRenderer(three);
+  const shared = acquireRenderer(three, !low);
   const {renderer} = shared;
+  /** The plushie for `options`: the quality's shell cap applies on top of the look's own. */
+  const build = (options: PlushieOptions & Partial<PlushiePose>) => {
+    const furShells = Math.min(options.furShells ?? MAX_FUR_SHELLS, low ? LOW_FUR_SHELLS : MAX_FUR_SHELLS);
+    return createPlushie(three, {...options, furShells, renderer});
+  };
   const canvas = document.createElement('canvas');
   const context = canvas.getContext('2d')!;
   canvas.style.display = 'block';
@@ -195,7 +262,7 @@ export function mountPlushie(container: HTMLElement, three: ThreeModule, options
 
   let plushie: Plushie;
   try {
-    plushie = createPlushie(three, {...rest, renderer} as PlushieOptions & Partial<PlushiePose>);
+    plushie = build(rest as PlushieOptions & Partial<PlushiePose>);
   } catch (error) {
     releaseRenderer(three, shared, user);
     canvas.remove();
@@ -357,7 +424,7 @@ export function mountPlushie(container: HTMLElement, three: ThreeModule, options
   const rebuild = () => {
     const {fur, ...pose} = plushie.pose;
     plushie.dispose();
-    plushie = createPlushie(three, {...look, ...pose, fur, renderer} as PlushieOptions & Partial<PlushiePose>);
+    plushie = build({...look, ...pose, fur} as PlushieOptions & Partial<PlushiePose>);
     world.add(plushie.object);
     invalidate();
   };
@@ -372,7 +439,7 @@ export function mountPlushie(container: HTMLElement, three: ThreeModule, options
     },
     canvas,
     get options() {
-      return {...look} as ViewerLook;
+      return {...look} as PlushieViewer['options'];
     },
     set(pose) {
       if (disposed) return;
@@ -411,21 +478,24 @@ export function mountPlushie(container: HTMLElement, three: ThreeModule, options
       if (disposed) return;
       const {fur, ...rest} = change as ViewerLook & Partial<PlushiePose> & {renderer?: unknown};
       delete rest.renderer;
-      // Pose fields passed along (a new colour) win over the current pose.
+      // Pose fields passed along (a new colour) win over the current pose; the colour stays in the look too.
       const posed: Partial<PlushiePose> = {};
       for (const [key, value] of Object.entries(rest)) {
         if ((POSE_KEYS as string[]).includes(key)) {
           if (value !== undefined) (posed as Record<string, unknown>)[key] = value;
-        } else if (value === undefined) delete look[key];
+          if (!(LOOK_POSE_KEYS as string[]).includes(key)) continue;
+        }
+        if (value === undefined) delete look[key];
         else look[key] = value;
       }
       for (const key of Object.keys(posed)) settle(key as Numeric);
       // The fur is set below (given, or the new fabric's): a running fur tween would overwrite it.
       if (fur !== undefined || 'fabric' in rest) settle('fur');
+      if (fur !== undefined) look.fur = fur;
+      else if ('fabric' in rest) delete look.fur;
       const {fur: _fur, ...pose} = plushie.pose;
       plushie.dispose();
-      plushie = createPlushie(three, {...look, ...pose, ...posed, ...(fur !== undefined && {fur}), renderer} as PlushieOptions &
-        Partial<PlushiePose>);
+      plushie = build({...look, ...pose, ...posed, ...(fur !== undefined && {fur})} as PlushieOptions & Partial<PlushiePose>);
       world.add(plushie.object);
       invalidate();
     },

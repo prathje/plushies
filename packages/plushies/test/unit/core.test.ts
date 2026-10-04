@@ -95,6 +95,25 @@ describe('createPlushie', () => {
     expect(plush.pose).toEqual({...DEFAULT_POSE, fur: fabricFur('felt')});
   });
 
+  test('furShells caps the body shells built and drawn (clamped to 3..16)', () => {
+    const body = (shells?: number) => {
+      const plush = createPlushie(THREE, {furShells: shells});
+      let found: THREE.Mesh | undefined;
+      plush.object.traverse(node => {
+        if ((node as THREE.Mesh).geometry?.userData.indexPerLayer) found ??= node as THREE.Mesh;
+      });
+      const geometry = found!.geometry;
+      return {layers: geometry.index!.count / geometry.userData.indexPerLayer - 1, drawn: geometry.drawRange.count / geometry.userData.indexPerLayer - 1};
+    };
+    expect(body().layers).toBe(16);
+    expect(body(6).layers).toBe(6);
+    expect(body(6).drawn).toBeLessThanOrEqual(6);
+    const warn = spyOn(console, 'warn').mockImplementation(() => {});
+    expect(body(1).layers).toBe(3);
+    expect(body(40).layers).toBe(16);
+    warn.mockRestore();
+  });
+
   test('lights: false leaves lighting to the caller', () => {
     const lights = (o: THREE.Object3D) => o.children.filter(c => (c as THREE.Light).isLight).length;
     expect(lights(createPlushie(THREE).object)).toBeGreaterThan(0);

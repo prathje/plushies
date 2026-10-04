@@ -1,7 +1,7 @@
 /** Pure parts: where a cursor hangs, and which ink reads on its colour. */
 import {expect, test} from 'bun:test';
 import {inks, parseColor} from '../src/dom';
-import {footprint, place, recoverMotion, separate, spots, type Claim, type MotionState} from '../src/index';
+import {createPlushieCursor, footprint, place, recoverMotion, separate, spots, type Bounds, type Claim, type MotionState} from '../src/index';
 
 const bounds = {left: 0, top: 0, right: 400, bottom: 300};
 const room = {x: 120, y: 40, up: 0};
@@ -43,6 +43,24 @@ test('points at the bottom-right corner of a box, else another that fits', () =>
   expect(at).toEqual({x: 306, y: 256, flipX: true, flipY: true});
 });
 
+test('a box with no room beside it: the label hangs back over it from the corner, and unmirrors with hysteresis', () => {
+  // 720 wide, the box 40 px from either edge; a label 256 wide fits on neither side.
+  const wide = {left: 0, top: 0, right: 720, bottom: 400};
+  const box = {left: 40, top: 150, width: 640, height: 40};
+  const open = {x: 256, y: 96, up: 40};
+  const at = place(null, box, wide, open, 1, undefined);
+  expect(at).toEqual({x: 674, y: 184, flipX: true, flipY: false});
+  // Shrunk back to a pill: 674 + 56 > 708 (the edge less the hysteresis) keeps it mirrored; 554 + 56 doesn't.
+  const pill = {x: 56, y: 32, up: 40};
+  expect(place(null, box, wide, pill, 1, at).flipX).toBe(true);
+  expect(place(null, {...box, width: 520}, wide, pill, 1, at).flipX).toBe(false);
+  // A narrower box with room on its left hangs left from its left corner instead.
+  expect(place(null, {left: 400, top: 150, width: 280, height: 40}, wide, open, 1, undefined)).toEqual({x: 406, y: 184, flipX: true, flipY: false});
+  // The same for a box as tall as the visible area: hang up over it from the bottom corner.
+  const tall = {left: 100, top: 20, width: 100, height: 360};
+  expect(place(null, tall, wide, {x: 100, y: 60, up: 10}, 1, undefined)).toEqual({x: 194, y: 374, flipX: false, flipY: true});
+});
+
 test('keeps the tip inside the visible area', () => {
   const at = place({x: 900, y: -50}, null, bounds, room, 1, undefined);
   expect([at.x, at.y]).toEqual([398, 2]);
@@ -63,8 +81,15 @@ test('spots: the best first, then the corners and side middles that fit', () => 
   const box = {left: 140, top: 100, width: 100, height: 60};
   const all = spots(null, box, bounds, room, 1, undefined);
   expect(all[0]).toEqual({...place(null, box, bounds, room, 1, undefined), spot: 'bottom-right'});
-  expect(all.map(p => p.spot)).toEqual(['bottom-right', 'bottom-left', 'top-right', 'top-left', 'right', 'left', 'bottom', 'top']);
-  expect(all.map(p => [p.x, p.y, ...corner(p)])).toEqual([
+  // The box is 60 tall and a footprint 40: the ring adds one spot up each side (46 px up from the bottom corners, down from the top ones).
+  expect(all.map(p => p.spot)).toEqual(['bottom-right', 'bottom-left', 'top-right', 'top-left', 'right', 'left', 'bottom', 'top', 'bottom-right/y1', 'bottom-left/y1', 'top-right/y1', 'top-left/y1']);
+  expect(all.slice(8).map(p => [p.x, p.y, ...corner(p)])).toEqual([
+    [234, 108, false, false],
+    [146, 108, true, false],
+    [234, 152, false, true],
+    [146, 152, true, true],
+  ]);
+  expect(all.slice(0, 8).map(p => [p.x, p.y, ...corner(p)])).toEqual([
     [234, 154, false, false],
     [146, 154, true, false],
     [234, 106, false, true],
@@ -107,7 +132,7 @@ test('separate: at a box, each takes the clear spot it reaches by moving least',
   // Two coming from the top left: the second takes the nearest spot left clear.
   const [first, second] = separate([near(1, at(0, 0)), near(2, at(0, 10))]);
   expect(first.spot).toBe('top-left');
-  expect(['left', 'top', 'bottom-left']).toContain(second.spot!);
+  expect(['left', 'top', 'bottom-left', 'top-left/y1']).toContain(second.spot!);
   // Right above the box's middle: a top corner, not the top middle (the plushie would sit on the box).
   expect(separate([near(1, at(170, 40))])[0].spot).toMatch(/^top-(left|right)$/);
   // …unless nothing else is clear.
@@ -155,6 +180,79 @@ test('separate: back on the best spot only once clear by the hysteresis', () => 
   expect(separate([claim(1, a), claim(2, b)])[1]).toEqual(b[0]);
   const far = spots({x: 190, y: 100}, null, bounds, room, 1, undefined);
   expect(separate([claim(1, a), claim(2, far, away)])[1]).toEqual(far[0]);
+});
+
+const GAP = 6;
+const clear = (a: Bounds, b: Bounds) => Math.min(a.right, b.right) + GAP <= Math.max(a.left, b.left) || Math.min(a.bottom, b.bottom) + GAP <= Math.max(a.top, b.top);
+/** Every pair of chosen footprints that overlaps, as 'i-j'. */
+const collisions = (picks: ReturnType<typeof separate>, rooms: Claim['room'][]) => {
+  const fps = picks.map((p, i) => footprint(p, rooms[i], 1));
+  return fps.flatMap((a, i) => fps.slice(i + 1).map((b, j) => (clear(a, b) ? null : `${i}-${i + 1 + j}`)).filter(Boolean));
+};
+/** `n` cursors arriving from below right at `box`, in rank order. */
+const pile = (n: number, box: Parameters<typeof spots>[1], room: Claim['room'], area: Bounds) =>
+  Array.from({length: n}, (_, i): Claim => ({rank: i + 1, options: spots(null, box, area, room, 1, undefined), room, vertical: 1, nearest: true, from: {x: 900 + 20 * i, y: 500 + 20 * i, flipX: false, flipY: false}}));
+
+test('separate: three and four cursors on one small box', () => {
+  const area = {left: 0, top: 0, right: 1250, bottom: 560};
+  const cell = {left: 600, top: 270, width: 54, height: 26};
+  // A flat footprint (island, the capsule below the tip): the four corners are all clear of each other.
+  const island = {x: 180, y: 70, up: 4};
+  for (const n of [3, 4]) {
+    const picks = separate(pile(n, cell, island, area));
+    expect(new Set(picks.map(p => p.spot)).size).toBe(n);
+    expect(collisions(picks, picks.map(() => island))).toEqual([]);
+  }
+  // Live with a plushie: 30 px stick up above the tip, so a footprint hanging
+  // up from the top corner (bottom at 276 + 30) meets one hanging down from
+  // the bottom corner (top at 290 − 30): only the two sides are clear. The
+  // third and fourth take distinct spots and pile on different cursors.
+  const live = {x: 130, y: 50, up: 30};
+  const three = separate(pile(3, cell, live, area));
+  expect(new Set(three.map(p => p.spot)).size).toBe(3);
+  expect(collisions(three.slice(0, 2), [live, live])).toEqual([]);
+  const four = separate(pile(4, cell, live, area));
+  expect(new Set(four.map(p => p.spot)).size).toBe(4);
+  const hits = collisions(four, four.map(() => live));
+  expect(hits.length).toBe(2);
+  expect(hits).toEqual(['0-2', '1-3']);
+});
+
+test('separate: the ring along a wide box seats more cursors clear of each other', () => {
+  const area = {left: 0, top: 0, right: 1250, bottom: 560};
+  const headline = {left: 300, top: 200, width: 600, height: 26};
+  const live = {x: 130, y: 50, up: 30};
+  const all = spots(null, headline, area, live, 1, undefined);
+  expect(all.map(p => p.spot)).toContain('bottom-right/x1');
+  expect(all.map(p => p.spot)).toContain('top-left/x1');
+  // One ring (RING is 1): 16 candidates at most.
+  expect(all.length).toBeLessThanOrEqual(16);
+  // Along the bottom edge: the two corners, one ring spot in from each, and the middle;
+  // the top edge's spots all meet them (the box is 26 tall, the footprints 80).
+  for (const n of [3, 4, 5]) {
+    const picks = separate(pile(n, headline, live, area));
+    expect(new Set(picks.map(p => p.spot)).size).toBe(n);
+    expect(collisions(picks, picks.map(() => live))).toEqual([]);
+  }
+});
+
+test('separate: two cursors on adjacent cells', () => {
+  const area = {left: 0, top: 0, right: 1250, bottom: 560};
+  const cells = [{left: 600, top: 270, width: 54, height: 26}, {left: 654, top: 270, width: 54, height: 26}];
+  const island = {x: 180, y: 70, up: 4};
+  const two = (room: Claim['room']) => cells.map((cell, i) => pile(1, cell, room, area)[0]).map((c, i) => ({...c, rank: i + 1}));
+  const picks = separate(two(island));
+  expect(collisions(picks, [island, island])).toEqual([]);
+  // Live: the second cell's edges are all within 130 px of the first cursor's
+  // label, so the second overlaps it somewhere; it picks the spot that overlaps least.
+  const live = {x: 130, y: 50, up: 30};
+  const [a, b] = separate(two(live));
+  expect(a.spot).toBe('bottom-right');
+  expect(b.spot).toBe('top-left');
+});
+
+test('createPlushieCursor without a document says so', () => {
+  expect(() => createPlushieCursor(null, {name: 'Pip'})).toThrow(/needs a browser \(document is not defined\)/);
 });
 
 test('ink: whichever reads better on the colour', () => {

@@ -91,9 +91,87 @@ test('restyle() merges into the current look', twice(async () => {
     a.restyle({color: '#ff0000'});
     return {look: a.options, turn: a.plushie.pose.turn, color: a.plushie.pose.color};
   });
-  expect(look.look).toEqual({kind: 'heart', lights: false, hat: 'top'});
+  // The colour (and fur) given stay in the look; the rest of the pose doesn't.
+  expect(look.look).toEqual({kind: 'heart', lights: false, hat: 'top', color: '#ff0000'});
   expect(look.turn).toBe(10);
   expect(look.color).toBe('#ff0000');
+  await page.close();
+}), {timeout: 180_000});
+
+test('options keeps colour and fur as given; a new fabric resets the fur', twice(async () => {
+  const {page} = await open();
+  const result = await page.evaluate(() => {
+    const w = window as any;
+    const a = w.mountPlushie(document.querySelector('#a'), w.THREE, {kind: 'star', color: '#00ff00', fur: 0.3, turn: 5, maxPixelRatio: 1});
+    const mounted = a.options;
+    a.restyle({fabric: 'felt'});
+    const refabriced = {...a.options};
+    a.restyle({fur: 0.2});
+    return {mounted, refabriced, furred: a.options, pose: a.plushie.pose.fur};
+  });
+  expect(result.mounted).toEqual({kind: 'star', color: '#00ff00', fur: 0.3});
+  expect(result.refabriced).toEqual({kind: 'star', color: '#00ff00', fabric: 'felt'});
+  expect(result.furred).toEqual({kind: 'star', color: '#00ff00', fabric: 'felt', fur: 0.2});
+  expect(result.pose).toBe(0.2);
+  await page.close();
+}), {timeout: 180_000});
+
+test('a missing container is a clear error', twice(async () => {
+  const {page} = await open();
+  const message = await page.evaluate(() => {
+    const w = window as any;
+    try {
+      w.mountPlushie(document.querySelector('#nope'), w.THREE, {});
+      return 'no error';
+    } catch (e) {
+      return (e as Error).message;
+    }
+  });
+  expect(message).toBe('plushies: mountPlushie needs a container element (got null)');
+  await page.close();
+}), {timeout: 180_000});
+
+/** Fur shells the body mesh of `view` draws. */
+const SHELLS = `view => {
+  let drawn = 0;
+  view.plushie.object.traverse(node => {
+    const g = node.geometry;
+    if (g?.userData.indexPerLayer && !drawn) drawn = g.drawRange.count / g.userData.indexPerLayer - 1;
+  });
+  return drawn;
+}`;
+
+test('quality: low caps the pixel ratio at 1 and the fur shells at 6; auto detects software WebGL', twice(async () => {
+  const {page} = await open();
+  const result = await page.evaluate(src => {
+    const w = window as any;
+    const shells = eval(src);
+    // Long fur on a big box: the pose alone would ask for every shell.
+    const options = {kind: 'circle', fabric: 'shaggy', fur: 0.5, maxPixelRatio: 4};
+    const full = w.mountPlushie(document.querySelector('#a'), w.THREE, {...options, quality: 'full'});
+    const low = w.mountPlushie(document.querySelector('#b'), w.THREE, {...options, quality: 'low'});
+    const auto = w.mountPlushie(document.querySelector('#c'), w.THREE, {...options});
+    const capped = w.mountPlushie(document.querySelector('#c'), w.THREE, {...options, quality: 'full', furShells: 4});
+    return {
+      software: w.hasSoftwareWebGL(),
+      full: {shells: shells(full), ratio: full.plushie.pose.pixelRatio, look: full.options},
+      low: {shells: shells(low), ratio: low.plushie.pose.pixelRatio, look: low.options},
+      auto: {shells: shells(auto)},
+      capped: shells(capped),
+      dpr: window.devicePixelRatio,
+    };
+  }, SHELLS);
+  // Headless Chromium draws through SwiftShader: the probe says so, and auto picks low.
+  expect(result.software).toBe(true);
+  expect(result.full.shells).toBe(16);
+  expect(result.low.shells).toBe(6);
+  expect(result.auto.shells).toBe(6);
+  expect(result.capped).toBe(4);
+  expect(result.low.ratio).toBe(1);
+  expect(result.full.ratio).toBe(Math.min(4, result.dpr));
+  // The quality is the viewer's, not the look's.
+  expect(result.full.look).toEqual({kind: 'circle', fabric: 'shaggy', fur: 0.5});
+  expect(result.low.look).toEqual({kind: 'circle', fabric: 'shaggy', fur: 0.5});
   await page.close();
 }), {timeout: 180_000});
 

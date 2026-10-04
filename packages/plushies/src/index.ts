@@ -1990,6 +1990,8 @@ interface Rig {
   furs: {material: TShader; uniforms: FurUniforms}[];
   bodyFur: {material: TShader; uniforms: FurUniforms};
   bodyGeometry: TGeometry;
+  /** Shells the body geometry holds (the `furShells` option). */
+  furShells: number;
   compensate: TObject[];
   /** Depth bias shared by every floating part (view units, set per pose). */
   bias: {value: number};
@@ -2000,6 +2002,7 @@ interface Spec {
   outline: OutlineParams;
   thickness: number;
   furGrain: number;
+  furShells: number;
   fabric: FabricPreset;
   finish: PlushieFinish;
   eyes: PlushieEyes;
@@ -2168,19 +2171,21 @@ function buildRig(three: T3, spec: Spec): Rig {
   const strand = 0.0115 * spec.furGrain;
   const bias = {value: 0};
   const furs: Rig['furs'] = [];
+  // Fuzzy trims are small: ten shells are plenty (fewer when the body has fewer).
+  const trimShells = Math.min(10, spec.furShells);
   const fuzzy = (geometry: TGeometry, color: string, length: number) => {
     const fur = furMaterial(three, {
       length,
       strand: Math.min(strand, 0.0115) * 0.8,
       gravity: 0.15,
       root: 0.7,
-      layers: 10,
+      layers: trimShells,
       sheen: 0.6,
       bias,
     });
     setFurColor(fur, toRgb(three, color));
     furs.push(fur);
-    const mesh = new three.Mesh(furShells(three, geometry, 10), fur.material);
+    const mesh = new three.Mesh(furShells(three, geometry, trimShells), fur.material);
     // Fur shells blend but still write depth, so a fuzzy part drawn before the
     // body would punch its faint outer shells through the body fur behind it
     // (a halo of background round a Santa cuff). Draw the body first.
@@ -2222,8 +2227,9 @@ function buildRig(three: T3, spec: Spec): Rig {
     mottle: spec.fabric.mottle,
     root: spec.fabric.root,
     gravity: spec.fabric.gravity,
+    layers: spec.furShells,
   });
-  const bodyMesh = new three.Mesh(furShells(three, body.geometry), bodyFur.material);
+  const bodyMesh = new three.Mesh(furShells(three, body.geometry, spec.furShells), bodyFur.material);
   inner.add(bodyMesh);
 
   const floaters: Rig['floaters'] = [];
@@ -2421,6 +2427,7 @@ function buildRig(three: T3, spec: Spec): Rig {
     furs,
     bodyFur,
     bodyGeometry: bodyMesh.geometry,
+    furShells: spec.furShells,
     compensate,
     bias,
   };
@@ -2459,6 +2466,12 @@ export interface PlushieOptions {
   fabric?: PlushieFabric;
   /** Size of one fur strand; smaller is finer, denser fur. (default: from `fabric`) */
   furGrain?: number;
+  /**
+   * Most fur shells drawn, 3..16; each is a pass over the body, so fewer is
+   * cheaper and a little flatter. The pose still draws only as many as the fur's
+   * on-screen length needs. (default: `MAX_FUR_SHELLS`, 16)
+   */
+  furShells?: number;
   /** Surface of eyes, mouth, moustache, glasses, neckwear and pins: gloss, satin, matte, felt. (default: 'satin') */
   finish?: PlushieFinish;
   /** Eye style. (default: 'dot') */
@@ -2583,6 +2596,7 @@ export const DEFAULT_OPTIONS = {
   seed: 1,
   thickness: 0.42,
   fabric: 'plush',
+  furShells: 16,
   finish: 'satin',
   eyes: 'dot',
   eyeSize: 1,
@@ -2706,6 +2720,9 @@ export function createPlushie(
   three: ThreeModule,
   options: PlushieOptions & Partial<PlushiePose> = {},
 ): Plushie {
+  if (typeof document === 'undefined') {
+    throw new Error('plushies: createPlushie needs a browser (document is not defined): its textures are painted on a canvas. Call it after mount.');
+  }
   const {
     kind: kindOption,
     roundness: roundnessOption,
@@ -2715,6 +2732,7 @@ export function createPlushie(
     thickness: thicknessOption,
     fabric: fabricOption,
     furGrain: furGrainOption,
+    furShells: furShellsOption,
     finish: finishOption,
     eyes: eyesOption,
     eyeSize: eyeSizeOption,
@@ -2756,6 +2774,7 @@ export function createPlushie(
   const thickness = within('thickness', thicknessOption, 0.42, 0.05, 1.5);
   const fabric = oneOf('fabric', fabricOption, PLUSHIE_FABRICS, 'plush');
   const furGrain = furGrainOption === undefined ? undefined : within('furGrain', furGrainOption, 1, 0.1, 6);
+  const furShells = Math.round(within('furShells', furShellsOption, FUR_SHELLS, 3, FUR_SHELLS));
   const finish = oneOf('finish', finishOption, PLUSHIE_FINISHES, 'satin');
   const eyes = oneOf('eyes', eyesOption, PLUSHIE_EYES, 'dot');
   const eyeSize = within('eyeSize', eyeSizeOption, 1, 0.1, 4);
@@ -2777,6 +2796,7 @@ export function createPlushie(
     outline: {roundness, sides, starInner, seed},
     thickness,
     furGrain: furGrain ?? preset.grain,
+    furShells,
     fabric: preset,
     finish,
     eyes,
@@ -2905,7 +2925,7 @@ function applyPose(rig: Rig, p: PlushiePose, color: Rgb) {
   // on-screen fur length: a small plush needs a handful, a full-screen one
   // the lot.
   const furPx = fur * k * p.pixelRatio;
-  const layers = Math.max(3, Math.min(FUR_SHELLS, Math.ceil(furPx / 0.8)));
+  const layers = Math.max(3, Math.min(rig.furShells, Math.ceil(furPx / 0.8)));
   rig.bodyFur.uniforms.uLayers.value = layers;
   rig.bodyGeometry.setDrawRange(0, rig.bodyGeometry.userData.indexPerLayer * (layers + 1));
   setFurColor(rig.bodyFur, color);

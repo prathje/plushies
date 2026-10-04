@@ -14,13 +14,13 @@
   "unpkg": "./dist/plushies.global.js",
   "jsdelivr": "./dist/plushies.global.js",
   "exports": {
-    ".": {"types": "./dist/index.d.ts", "import": "./dist/index.js", "require": "./dist/plushies.cjs"},
-    "./viewer": {"types": "./dist/viewer.d.ts", "import": "./dist/viewer.js"},
-    "./bundled": {"types": "./dist/bundled.d.ts", "import": "./dist/plushies.bundled.js"},
+    ".": {"types": "./dist/index.d.ts", "import": "./dist/index.js", "require": "./dist/plushies.cjs", "default": "./dist/index.js"},
+    "./viewer": {"types": "./dist/viewer.d.ts", "import": "./dist/viewer.js", "default": "./dist/viewer.js"},
+    "./bundled": {"types": "./dist/bundled.d.ts", "import": "./dist/plushies.bundled.js", "default": "./dist/plushies.bundled.js"},
     "./package.json": "./package.json"
   },
-  "files": ["dist", "README.md", "LICENSE"],
-  "sideEffects": ["./site/*.ts", "./src/global.ts"],
+  "files": ["dist", "!dist/*.map", "README.md", "LICENSE"],
+  "sideEffects": ["./dist/plushies.global.js", "./src/global.ts", "./site/*.ts"],
   "scripts": {
     "build": "bun run build.ts",
     "typecheck": "tsc -p tsconfig.json",

@@ -1,6 +1,8 @@
+import pkg from '../package.json';
 import {lookDiff, poseDiff, type EditorState} from './schema';
 
-export const VERSION = '0.1';
+/** The published version, so the CDN URLs match it: a range like `@0.1` doesn't match a prerelease. */
+export const VERSION: string = pkg.version;
 export const CDN = `https://cdn.jsdelivr.net/npm/plushies@${VERSION}/dist`;
 export const THREE_CDN = 'https://cdn.jsdelivr.net/npm/three@0.186.0/build/three.module.js';
 

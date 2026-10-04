@@ -4,8 +4,8 @@
  * capsule grows into a small status card (shimmering line, step chip, detail)
  * and shrinks back to a pill when it's done.
  */
-import type {CursorView, Design} from '../design';
-import {CHECK_ICON, clearText, el, injectStyle, morph, svg, swapText, type StyleRoot} from '../dom';
+import type {CursorView, Design} from '../design.js';
+import {CHECK_ICON, clearText, el, finalSize, injectStyle, morph, svg, swapText, type StyleRoot} from '../dom.js';
 
 const SIZE = 40;
 const SEAT = 34;
@@ -104,7 +104,10 @@ export function islandDesign(styles: StyleRoot): Design {
     anchor: {x: 13, y: 21},
     motion: {tip: 15, body: 17, damping: 0.72, bob: 0, hop: 0, leash: 22},
     vertical: 1,
-    room: () => ({x: 13 + box.offsetWidth + 8, y: 21 + box.offsetHeight + 8, up: 4}),
+    room() {
+      const {width, height} = finalSize(box);
+      return {x: 13 + width + 8, y: 21 + height + 8, up: 4};
+    },
     render(view: CursorView) {
       const s = view.status;
       const note = view.said ?? view.done;

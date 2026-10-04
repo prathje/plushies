@@ -445,3 +445,277 @@ test('cursors on one element take the nearest clear spots, and stay put when the
   expect(errors(logs)).toEqual([]);
   await page.close();
 }, 60_000);
+
+test('a status that grows past the container edge mirrors the cursor, in every design, and unmirrors when it shrinks', async () => {
+  const {page, logs} = await open();
+  const r = await page.evaluate(async () => {
+    const w = window as any;
+    const wait = (ms: number) => new Promise(r => setTimeout(r, ms));
+    // The trials' editor: 720 px wide, clipping, a block whose right edge is 40 px from the container's.
+    const host = document.querySelector('#host') as HTMLElement;
+    host.style.cssText = 'position:relative;width:720px;height:400px;overflow:hidden';
+    const block = document.createElement('div');
+    block.style.cssText = 'position:absolute;left:40px;top:150px;width:640px;height:40px;background:#ddd';
+    host.append(block);
+    const edge = host.getBoundingClientRect();
+    // Everything the cursor shows: its parts that are displayed, not hidden or faded, and not a line sliding out.
+    const shown = (e: Element, root: Element) => {
+      for (let n: Element | null = e; n && n !== root; n = n.parentElement) {
+        const s = getComputedStyle(n);
+        if (s.display === 'none' || s.visibility === 'hidden' || parseFloat(s.opacity) < 0.05 || n.classList.contains('pc-t-out') || n.classList.contains('pc-sr')) return false;
+      }
+      return true;
+    };
+    const extent = (c: any) => {
+      const rects = [...c.element.querySelectorAll('*')].filter((e: Element) => shown(e, c.element)).map((e: Element) => e.getBoundingClientRect()).filter((b: DOMRect) => b.width && b.height);
+      return {
+        left: Math.min(...rects.map((b: DOMRect) => b.left)),
+        right: Math.max(...rects.map((b: DOMRect) => b.right)),
+        top: Math.min(...rects.map((b: DOMRect) => b.top)),
+        bottom: Math.max(...rects.map((b: DOMRect) => b.bottom)),
+      };
+    };
+    const out: Record<string, any> = {};
+    for (const design of ['live', 'buddy', 'island']) {
+      block.style.width = '640px';
+      const c = w.createPlushieCursor(w.THREE, {name: 'Pip', design, container: host, x: 300, y: 300});
+      const moved = await c.pointAt(block);
+      c.status({text: 'Rewriting the headline', detail: 'Trying a few options', progress: 0.3, step: [1, 3]});
+      await wait(1200);
+      const grown = {flip: c.element.classList.contains('pc-flip-x'), ...extent(c), box: c.element.querySelector('.pc-box').getBoundingClientRect().width};
+      // A longer line wraps at the label's maximum width (~240 px).
+      c.status({text: 'Rewriting the whole headline so it fits on two lines', detail: 'Trying a few options for the opener', progress: 0.6, step: [2, 3]});
+      await wait(1200);
+      const wide = {flip: c.element.classList.contains('pc-flip-x'), ...extent(c), box: c.element.querySelector('.pc-box').getBoundingClientRect().width};
+      // Back to the name: the block's right edge is now 160 px from the container's, so the pill fits beside it.
+      block.style.width = '520px';
+      c.status(null);
+      await wait(1200);
+      const shrunk = {flip: c.element.classList.contains('pc-flip-x'), ...extent(c)};
+      c.dispose();
+      out[design] = {moved, grown, wide, shrunk};
+    }
+    return {edge: {left: edge.left, right: edge.right, top: edge.top, bottom: edge.bottom}, ...out} as Record<string, any>;
+  });
+  for (const design of ['live', 'buddy', 'island']) {
+    const d = r[design];
+    expect(d.moved).toBe('arrived');
+    for (const phase of ['grown', 'wide', 'shrunk']) {
+      const e = d[phase];
+      expect(e.right, `${design} ${phase} right`).toBeLessThanOrEqual(r.edge.right + 0.5);
+      expect(e.left, `${design} ${phase} left`).toBeGreaterThanOrEqual(r.edge.left - 0.5);
+      expect(e.top, `${design} ${phase} top`).toBeGreaterThanOrEqual(r.edge.top - 0.5);
+      expect(e.bottom, `${design} ${phase} bottom`).toBeLessThanOrEqual(r.edge.bottom + 0.5);
+    }
+    expect(d.grown.flip, `${design} grown flips`).toBe(true);
+    expect(d.wide.flip, `${design} wide flips`).toBe(true);
+    expect(d.wide.box).toBeGreaterThan(200);
+    expect(d.shrunk.flip, `${design} shrunk unflips`).toBe(false);
+  }
+  expect(errors(logs)).toEqual([]);
+  await page.close();
+}, 120_000);
+
+test('a target scrolled out of a box inside the container waits at that box\'s edge', async () => {
+  const {page, logs} = await open();
+  const r = await page.evaluate(async () => {
+    const w = window as any;
+    const tip = (c: any) => new DOMMatrix(getComputedStyle(c.element).transform).transformPoint(new DOMPoint(0, 0));
+    const host = document.querySelector('#host') as HTMLElement;
+    host.style.cssText = 'position:relative;width:400px;height:300px';
+    const scroller = document.createElement('div');
+    scroller.style.cssText = 'position:absolute;left:50px;top:50px;width:200px;height:100px;overflow:auto;border:3px solid #333';
+    const content = document.createElement('div');
+    content.style.cssText = 'position:relative;height:400px';
+    const target = document.createElement('div');
+    target.style.cssText = 'position:absolute;left:20px;top:150px;width:60px;height:30px;background:#ccc';
+    content.append(target);
+    scroller.append(content);
+    host.append(scroller);
+    const c = w.createPlushieCursor(null, {name: 'A', container: host, x: 350, y: 250});
+    const moved = await c.pointAt(target);
+    const waiting = tip(c);
+    // Scrolled into view: the target's bottom edge is now 30 px below the scroller's top padding edge.
+    scroller.scrollTop = 150;
+    await new Promise(r => setTimeout(r, 900));
+    const found = tip(c);
+    // Scrolled past the top: waits at the top edge.
+    scroller.scrollTop = 300;
+    await new Promise(r => setTimeout(r, 900));
+    const above = tip(c);
+    const inner = {left: 50 + scroller.clientLeft, top: 50 + scroller.clientTop, bottom: 50 + scroller.clientTop + scroller.clientHeight};
+    return {moved, waiting: [waiting.x, waiting.y], found: [found.x, found.y], above: [above.x, above.y], inner};
+  });
+  expect(r.moved).toBe('arrived');
+  // The box is clamped to zero height on the scroller's bottom edge: the tip
+  // sits on it (a corner spot 6 px in, or the side's middle), within the
+  // target's x range — not 80 px below, on the hidden element.
+  expect(r.waiting[1]).toBeGreaterThan(r.inner.bottom - 7);
+  expect(r.waiting[1]).toBeLessThan(r.inner.bottom + 0.5);
+  expect(r.waiting[0]).toBeGreaterThan(r.inner.left + 20);
+  expect(r.waiting[0]).toBeLessThan(r.inner.left + 80);
+  // Scrolled into view: on the target (30 px tall from the scroller's top padding edge).
+  expect(r.found[1]).toBeGreaterThan(r.inner.top - 0.5);
+  expect(r.found[1]).toBeLessThan(r.inner.top + 30.5);
+  // Scrolled past the top: on the top edge.
+  expect(r.above[1]).toBeGreaterThan(r.inner.top - 0.5);
+  expect(r.above[1]).toBeLessThan(r.inner.top + 7);
+  expect(errors(logs)).toEqual([]);
+  await page.close();
+}, 60_000);
+
+test('onLost says when a followed target goes away, and target tells what is followed', async () => {
+  const {page, logs} = await open();
+  const r = await page.evaluate(async () => {
+    const w = window as any;
+    const wait = (ms: number) => new Promise(r => setTimeout(r, ms));
+    const a = document.querySelector('#a') as HTMLElement;
+    const thing = (top: number) => {
+      const t = document.createElement('div');
+      t.style.cssText = `position:absolute;left:300px;top:${top}px;width:40px;height:40px`;
+      a.append(t);
+      return t;
+    };
+    const lost: unknown[] = [];
+    const c = w.createPlushieCursor(null, {name: 'A', container: a, x: 50, y: 50, onLost: (t: unknown) => lost.push(t)});
+    const none = c.target;
+    // Gone after arriving.
+    const t1 = thing(100);
+    await c.pointAt(t1);
+    const following = c.target === t1;
+    t1.remove();
+    await wait(150);
+    const afterFirst = {calls: lost.length, which: lost[0] === t1, target: c.target};
+    // Gone while the move is in flight.
+    const t2 = thing(300);
+    const move = c.pointAt(t2);
+    await wait(40);
+    t2.remove();
+    const result = await move;
+    const afterSecond = {calls: lost.length, which: lost[1] === t2};
+    // A function target that stops returning a box.
+    let box: {x: number; y: number; width: number; height: number} | null = {x: 100, y: 100, width: 20, height: 20};
+    const fn = () => box;
+    await c.pointAt(fn);
+    box = null;
+    await wait(150);
+    const afterFn = {calls: lost.length, which: lost[2] === fn, target: c.target};
+    // Letting go on purpose is not losing: pointAt(null), release, a new move, dispose.
+    const t3 = thing(200);
+    await c.pointAt(t3);
+    await c.pointAt(null);
+    await c.pointAt(t3);
+    c.release();
+    const released = c.target;
+    await c.pointAt(t3);
+    await c.moveTo(100, 100);
+    await c.pointAt(t3);
+    await c.pointAt(thing(250));
+    await c.pointAt(t3);
+    c.dispose();
+    await wait(150);
+    return {none, following, afterFirst, result, afterSecond, afterFn, released, calls: lost.length};
+  });
+  expect(r.none).toBeNull();
+  expect(r.following).toBe(true);
+  expect(r.afterFirst).toEqual({calls: 1, which: true, target: null});
+  expect(r.result).toBe('lost');
+  expect(r.afterSecond).toEqual({calls: 2, which: true});
+  expect(r.afterFn).toEqual({calls: 3, which: true, target: null});
+  expect(r.released).toBeNull();
+  expect(r.calls).toBe(3);
+  expect(errors(logs)).toEqual([]);
+  await page.close();
+}, 60_000);
+
+test('a highlight on an element that left the page fades out by itself', async () => {
+  const {page, logs} = await open();
+  const r = await page.evaluate(async () => {
+    const w = window as any;
+    const wait = (ms: number) => new Promise(r => setTimeout(r, ms));
+    const a = document.querySelector('#a') as HTMLElement;
+    const t = document.createElement('div');
+    t.style.cssText = 'position:absolute;left:300px;top:100px;width:40px;height:40px';
+    a.append(t);
+    const c = w.createPlushieCursor(null, {name: 'A', container: a, x: 50, y: 50});
+    c.highlight(t);
+    let box: {left: number; top: number; width: number; height: number} | null = {left: 10, top: 10, width: 30, height: 30};
+    c.highlight(() => box);
+    await wait(100);
+    const marks = () => [...a.querySelectorAll('.pc-mark')].map(m => ({out: m.classList.contains('pc-out'), display: (m as HTMLElement).style.display}));
+    const before = marks();
+    t.remove();
+    box = null;
+    await wait(200);
+    const fading = marks();
+    await wait(700);
+    const after = marks();
+    // A function target coming back shows its mark again.
+    box = {left: 10, top: 10, width: 30, height: 30};
+    await wait(100);
+    const back = marks();
+    c.dispose();
+    return {before, fading, after, back, left: a.querySelectorAll('.pc-mark').length};
+  });
+  expect(r.before).toEqual([{out: false, display: ''}, {out: false, display: ''}]);
+  // The element's mark fades where it was while the function's hides, as before.
+  expect(r.fading.sort((a, b) => Number(b.out) - Number(a.out))).toEqual([{out: true, display: ''}, {out: false, display: 'none'}]);
+  expect(r.after).toEqual([{out: false, display: 'none'}]);
+  expect(r.back).toEqual([{out: false, display: ''}]);
+  expect(r.left).toBe(0);
+  expect(errors(logs)).toEqual([]);
+  await page.close();
+}, 60_000);
+
+test('progress is clamped, a contenteditable container warns, and the last dispose unhooks the window', async () => {
+  const {page, logs} = await open();
+  const r = await page.evaluate(async () => {
+    const w = window as any;
+    const added: string[] = [];
+    const removed: string[] = [];
+    const add = window.addEventListener.bind(window);
+    const remove = window.removeEventListener.bind(window);
+    window.addEventListener = ((type: string, ...rest: any[]) => {
+      added.push(type);
+      return (add as any)(type, ...rest);
+    }) as any;
+    window.removeEventListener = ((type: string, ...rest: any[]) => {
+      removed.push(type);
+      return (remove as any)(type, ...rest);
+    }) as any;
+    const host = document.querySelector('#host') as HTMLElement;
+    host.style.cssText = 'width:300px;height:200px';
+    const editor = document.createElement('div');
+    editor.contentEditable = 'true';
+    editor.style.cssText = 'width:300px;height:200px';
+    host.append(editor);
+    const c = w.createPlushieCursor(null, {name: 'E', container: editor});
+    const bar = c.element.querySelector('.pc-bar') as HTMLElement;
+    const p = () => (bar.classList.contains('has') ? bar.firstElementChild!.getAttribute('style') : null);
+    c.status({text: 'Working', progress: 1.7});
+    const over = p();
+    c.status({text: 'Working', progress: -0.3});
+    const under = p();
+    c.status({text: 'Working', progress: NaN});
+    const nan = p();
+    const d = w.createPlushieCursor(null, {name: 'D', container: host});
+    c.dispose();
+    const afterOne = removed.length;
+    d.dispose();
+    const windowed = (list: string[]) => list.filter(t => t === 'resize' || t === 'scroll');
+    const afterBoth = windowed(removed).slice();
+    // Mounting again listens again.
+    w.createPlushieCursor(null, {name: 'F', container: host}).dispose();
+    return {over, under, nan, added: windowed(added), afterOne, afterBoth, again: windowed(removed)};
+  });
+  expect(r.over).toBe('--p: 1;');
+  expect(r.under).toBe('--p: 0;');
+  expect(r.nan).toBeNull();
+  expect(r.added).toEqual(['resize', 'scroll', 'resize', 'scroll']);
+  expect(r.afterOne).toBe(0);
+  expect(r.afterBoth).toEqual(['resize', 'scroll']);
+  expect(r.again).toEqual(['resize', 'scroll', 'resize', 'scroll']);
+  expect(logs.some(l => /container is contenteditable/.test(l))).toBe(true);
+  expect(errors(logs)).toEqual([]);
+  await page.close();
+}, 60_000);

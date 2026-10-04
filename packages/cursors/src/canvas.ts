@@ -8,8 +8,8 @@
  *   // In your render loop, after drawing the scene:
  *   paintHighlight(ctx, shape.bounds(), '#7c3aed', {busy: true});
  */
-import {mixWhite} from './dom';
-import type {VirtualElement} from './index';
+import {mixWhite} from './dom.js';
+import type {VirtualElement} from './index.js';
 
 /** A box in a canvas's own coordinates: drawing-buffer pixels unless `size` says otherwise. */
 export interface CanvasBox {

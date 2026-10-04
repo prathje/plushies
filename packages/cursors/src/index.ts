@@ -22,14 +22,14 @@
  */
 import type {ThreeModule} from 'plushies';
 import {easeInOut, easeOut, mountPlushie, type PlushieViewer, type ViewerOptions} from 'plushies/viewer';
-import type {CursorDesign, CursorStatus, CursorView, Design, Motion} from './design';
-import {buddyDesign} from './designs/buddy';
-import {islandDesign} from './designs/island';
-import {liveDesign} from './designs/live';
-import {el, inks, injectStyle, injectStyles, reducedMotion, styleRootOf, toHex, type StyleRoot} from './dom';
+import type {CursorDesign, CursorStatus, CursorView, Design, Motion} from './design.js';
+import {buddyDesign} from './designs/buddy.js';
+import {islandDesign} from './designs/island.js';
+import {liveDesign} from './designs/live.js';
+import {el, inks, injectStyle, injectStyles, reducedMotion, styleRootOf, toHex, type StyleRoot} from './dom.js';
 
-export type {CursorDesign, CursorStatus} from './design';
-export {fromCanvas, paintHighlight, type CanvasBox, type PaintHighlightOptions} from './canvas';
+export type {CursorDesign, CursorStatus} from './design.js';
+export {fromCanvas, paintHighlight, type CanvasBox, type PaintHighlightOptions} from './canvas.js';
 export const CURSOR_DESIGNS: readonly CursorDesign[] = ['live', 'buddy', 'island'];
 
 /** A box in the container's pixels. `{x, y, width, height}` works too. */
@@ -87,6 +87,13 @@ export interface PlushieCursorOptions {
   plushie?: boolean;
   /** Stacking of the container's cursor layer. (default: 2147483000) */
   zIndex?: number;
+  /**
+   * A followed target went away (the element was removed; the function
+   * returned null or threw), whether the move was still in flight (it also
+   * resolves 'lost') or it had arrived. Not called for `pointAt(null)`,
+   * `release`, a new move, or `dispose`.
+   */
+  onLost?: (target: Target) => void;
 }
 
 export interface HighlightOptions {
@@ -108,6 +115,8 @@ export interface PlushieCursor {
   /** The plushie's viewer: hop, squish, look, restyle, … (null without a plushie) */
   readonly viewer: PlushieViewer | null;
   readonly design: CursorDesign;
+  /** What it is following now (null between targets). */
+  readonly target: Target | null;
   /** Glide to x, y (container pixels). */
   moveTo(x: number, y: number): Promise<MoveResult>;
   /**
@@ -232,6 +241,11 @@ const layers = new WeakMap<HTMLElement, Layer>();
 function joinLayer(container: HTMLElement, cursor: CursorState, zIndex?: number): Layer {
   let layer = layers.get(container);
   if (!layer) {
+    // An editor (ProseMirror, …) owns its contenteditable's children and throws out ours.
+    const editable = container.getAttribute('contenteditable');
+    if (container.isContentEditable || (editable !== null && editable !== 'false') || container.classList.contains('ProseMirror')) {
+      warnOnce('the container is contenteditable (an editor rewrites its DOM and drops the cursor layer): use a wrapper element around the editor as the container');
+    }
     const element = el('div', 'pc-layer', container);
     const made: Layer = {element, container, styles: document, cursors: new Set(), position: null, ready: false, visible: true, observers: []};
     // Layout changes that aren't window resizes or scrolls (a sidebar
@@ -307,8 +321,11 @@ interface Frame {
   sx: number;
   sy: number;
   bounds: Bounds;
+  /** Scrolling ancestors of a target up to here clip it. */
+  container: HTMLElement;
 }
 
+/** @internal */
 export interface Bounds {
   left: number;
   top: number;
@@ -328,6 +345,7 @@ function frameOf(layer: Layer): Frame {
     top: origin.top,
     sx,
     sy,
+    container: layer.container,
     bounds: {
       left: (Math.max(box.left, 0) - origin.left) / sx,
       top: (Math.max(box.top, 0) - origin.top) / sy,
@@ -368,13 +386,54 @@ function asBox(b: AnyBox | null | undefined): Box | null {
   return box;
 }
 
+type Rect = {left: number; top: number; width: number; height: number};
+
+/** The parent to walk up to, through a shadow root's host. */
+const parentOf = (node: Element): Element | null => node.parentElement ?? (node.parentNode instanceof ShadowRoot ? node.parentNode.host : null);
+
+/**
+ * `r` cut down to what shows of `element` inside its scrolling ancestors
+ * (any with an overflow that isn't visible, below the container): an element
+ * scrolled out of a box inside the container yields a zero-sized box on that
+ * box's edge, so the tip waits there as it does at the container's edge.
+ * Nothing is cached: ancestors are walked each frame while following.
+ */
+function clipToScrollers(element: Element, r: Rect, container: HTMLElement): Rect {
+  let left = r.left;
+  let top = r.top;
+  let right = r.left + r.width;
+  let bottom = r.top + r.height;
+  for (let node = parentOf(element); node && node !== container; node = parentOf(node)) {
+    if (!(node instanceof HTMLElement)) continue;
+    const {overflowX, overflowY} = getComputedStyle(node);
+    if (overflowX === 'visible' && overflowY === 'visible') continue;
+    // The padding box (inside the border), in viewport pixels — scaled like the rect.
+    const b = node.getBoundingClientRect();
+    const scale = node.offsetWidth ? b.width / node.offsetWidth : 1;
+    const l = b.left + node.clientLeft * scale;
+    const t = b.top + node.clientTop * scale;
+    const rr = l + node.clientWidth * scale;
+    const bb = t + node.clientHeight * scale;
+    if (overflowX !== 'visible') {
+      left = clamp(left, l, rr);
+      right = clamp(right, l, rr);
+    }
+    if (overflowY !== 'visible') {
+      top = clamp(top, t, bb);
+      bottom = clamp(bottom, t, bb);
+    }
+  }
+  return {left, top, width: right - left, height: bottom - top};
+}
+
 function resolveBox(target: Target, frame: Frame): Box | null {
   if (typeof target === 'function') return asBox(target());
   if (!isTarget(target)) return null;
   if (typeof (target as VirtualElement).getBoundingClientRect === 'function') {
     if (target instanceof Element && !target.isConnected) return null;
-    const r = (target as VirtualElement).getBoundingClientRect();
+    let r = (target as VirtualElement).getBoundingClientRect();
     if (!r || !finite(r.left, r.top, r.width, r.height)) return null;
+    if (target instanceof Element) r = clipToScrollers(target, r, frame.container);
     return {
       left: (r.left - frame.left) / frame.sx,
       top: (r.top - frame.top) / frame.sy,
@@ -388,6 +447,7 @@ function resolveBox(target: Target, frame: Frame): Box | null {
 // ---------------------------------------------------------------------------
 // Placement: which way the cursor hangs, ported from the live editor.
 
+/** @internal */
 export interface Flip {
   x: number;
   y: number;
@@ -406,8 +466,11 @@ const INSET = 6;
  * below or above it, as the design hangs) unless that leaves the visible
  * area, then mirrored; when neither side fits, whichever has more room.
  * Pointing at a box, the tip goes on whichever corner leaves room —
- * bottom-right first. The tip itself stays inside the visible area, so a
- * cursor whose target scrolls away waits at the edge.
+ * bottom-right first, then the other corner hanging outward, then the same
+ * corner with the label mirrored back over the box (a box as wide as the
+ * visible area has no room beside it). The tip itself stays inside the
+ * visible area, so a cursor whose target scrolls away waits at the edge.
+ * @internal
  */
 export function place(
   at: {x: number; y: number} | null,
@@ -451,7 +514,13 @@ export function place(
   let flipX = false;
   if (!fitsRight(x)) {
     const xl = inside(left + INSET, bounds.left, bounds.right);
-    if (fitsLeft(xl) || xl - bounds.left > bounds.right - x) {
+    if (fitsLeft(xl)) {
+      flipX = true;
+      x = xl;
+    } else if (fitsLeft(x)) {
+      // Neither side of the box has room: the label hangs back over it.
+      flipX = true;
+    } else if (xl - bounds.left > bounds.right - x) {
       flipX = true;
       x = xl;
     }
@@ -461,7 +530,12 @@ export function place(
   if (!fitsAway(y)) {
     // Hanging below a box that's too low: go to its top corner and hang up.
     const yb = vertical === 1 ? inside(top + INSET, bounds.top, bounds.bottom) : y;
-    if (fitsBack(yb) || moreRoomBack(yb)) {
+    if (fitsBack(yb)) {
+      flipY = true;
+      y = yb;
+    } else if (fitsBack(y)) {
+      flipY = true;
+    } else if (moreRoomBack(yb)) {
       flipY = true;
       y = yb;
     }
@@ -472,7 +546,10 @@ export function place(
 // ---------------------------------------------------------------------------
 // Separation: cursors in one container keep their labels off each other.
 
-/** What a placement covers: the tip, the label beside it and what sticks out the other way. */
+/**
+ * What a placement covers: the tip, the label beside it and what sticks out the other way.
+ * @internal
+ */
 export function footprint(p: Flip, room: {x: number; y: number; up?: number}, vertical: 1 | -1): Bounds {
   const up = room.up ?? 0;
   const down = (p.flipY ? -vertical : vertical) === 1;
@@ -484,11 +561,26 @@ export function footprint(p: Flip, room: {x: number; y: number; up?: number}, ve
   };
 }
 
+/** Clear space kept between two cursors' footprints (px). */
+const GAP = 6;
+
+/**
+ * How many further spots along each edge, in from each corner (each a
+ * footprint and a gap further in, while the edge is that long). One ring: a
+ * box gets at most 8 + 8 = 16 candidate spots, so around a wide or tall box
+ * up to six cursors sit clear of each other; around a box smaller than a
+ * footprint only its two sides (or four corners, for a flat footprint) are
+ * clear, and the rest share spots by least overlap.
+ */
+const RING = 1;
+
 /**
  * Where the cursor could go, best first: `place`'s choice, then — pointing
- * at a box — its other corners and the middles of its sides, each hanging
- * outward (and named); at a point, the other ways of hanging off it. Only
- * spots whose footprint fits the visible area follow the first.
+ * at a box — its other corners, the middles of its sides and the second
+ * ring in from the corners along its edges, each hanging outward (and
+ * named); at a point, the other ways of hanging off it. Only spots whose
+ * footprint fits the visible area follow the first.
+ * @internal
  */
 export function spots(
   at: {x: number; y: number} | null,
@@ -523,6 +615,21 @@ export function spots(
       {x: midX, y: bottom, flipX: false, flipY: below, spot: 'bottom'},
       {x: midX, y: top, flipX: false, flipY: above, spot: 'top'},
     ];
+    // The ring: along each edge from each corner, the next spots clear of
+    // the corner's footprint, hanging the corner's way. 'bottom-right/x1' is
+    // one in along the bottom edge, 'bottom-right/y1' one up the right side.
+    const stepX = room.x + GAP;
+    const stepY = room.y + (room.up ?? 0) + GAP;
+    for (let n = 1; n <= RING; n++) {
+      const xr = right - n * stepX;
+      const xl = left + n * stepX;
+      const yb = bottom - n * stepY;
+      const yt = top + n * stepY;
+      if (xr >= left) options.push({x: xr, y: bottom, flipX: false, flipY: below, spot: `bottom-right/x${n}`}, {x: xr, y: top, flipX: false, flipY: above, spot: `top-right/x${n}`});
+      if (xl <= right) options.push({x: xl, y: bottom, flipX: true, flipY: below, spot: `bottom-left/x${n}`}, {x: xl, y: top, flipX: true, flipY: above, spot: `top-left/x${n}`});
+      if (yb >= top) options.push({x: right, y: yb, flipX: false, flipY: below, spot: `bottom-right/y${n}`}, {x: left, y: yb, flipX: true, flipY: below, spot: `bottom-left/y${n}`});
+      if (yt <= bottom) options.push({x: right, y: yt, flipX: false, flipY: above, spot: `top-right/y${n}`}, {x: left, y: yt, flipX: true, flipY: above, spot: `top-left/y${n}`});
+    }
   }
   const fits = (p: Flip) => {
     const f = footprint(p, room, vertical);
@@ -533,7 +640,10 @@ export function spots(
   return [named ?? first, ...options.filter(p => fits(p) && !same(p, first))];
 }
 
-/** One cursor's say in `separate`. */
+/**
+ * One cursor's say in `separate`.
+ * @internal
+ */
 export interface Claim {
   /** Lower goes first and keeps its spot: the cursor that got there earlier. */
   rank: number;
@@ -553,11 +663,8 @@ export interface Claim {
   held?: string;
 }
 
-/** Spots on a box from which the plushie floats over it. */
-const OVER = new Set(['top', 'bottom']);
-
-/** Clear space kept between two cursors' footprints (px). */
-const GAP = 6;
+/** Spots on a box from which the plushie floats over it: the top and bottom middles, and the ring along those edges. */
+const over = (spot: string | undefined) => !!spot && /^(top|bottom)$|\/x\d/.test(spot);
 
 const overlap = (a: Bounds, b: Bounds, gap: number) =>
   Math.max(0, Math.min(a.right, b.right) + gap - Math.max(a.left, b.left)) *
@@ -575,25 +682,30 @@ function travel(a: Flip, b: Flip, room: {x: number; y: number; up?: number}, ver
  * In rank order, each takes its best option if that is clear of the cursors
  * before it — they never move for it — else the clear one nearest to where
  * it is (the one it already holds first), else the one that overlaps them
- * least. Back on the best spot only once it is clear by the hysteresis too,
- * not to flicker.
+ * least, counting a footprint already overlapped by another cursor as more
+ * (a pile spreads over the cursors before it instead of stacking on one).
+ * Back on the best spot only once it is clear by the hysteresis too, not to
+ * flicker.
+ * @internal
  */
 export function separate(claims: Claim[]): Flip[] {
   const chosen: Flip[] = new Array(claims.length);
   const taken: Bounds[] = [];
+  /** Per taken footprint: how many later cursors overlap it. */
+  const crowd: number[] = [];
   const order = claims.map((_, i) => i).sort((a, b) => claims[a].rank - claims[b].rank);
   for (const i of order) {
     const {room, vertical, was, from, nearest, held} = claims[i];
     let {options} = claims[i];
-    const area = (p: Flip, gap: number) => taken.reduce((sum, t) => sum + overlap(footprint(p, room, vertical), t, gap), 0);
+    const area = (p: Flip, gap: number, weighted = false) => taken.reduce((sum, t, k) => sum + overlap(footprint(p, room, vertical), t, gap) * (weighted ? 1 + crowd[k] : 1), 0);
     const same = (p: Flip) => !!was && p.x === was.x && p.y === was.y && p.flipX === was.flipX && p.flipY === was.flipY;
     let away = !!was && !same(options[0]);
     if (nearest) {
       // At a box: the spot it holds while clear, else the nearest — no best
-      // spot to go back to. The top and bottom middles put the plushie over
-      // the box: only when no corner or side is clear (and left for one).
-      const last = (p: Flip) => (p.spot && OVER.has(p.spot) ? 1e6 : 0);
-      const far = (p: Flip) => (held && p.spot === held && !OVER.has(held) ? -1 : last(p) + (from ? travel(from, p, room, vertical) : 0));
+      // spot to go back to. Spots that put the plushie over the box come
+      // only when no corner or side is clear (and left for one).
+      const last = (p: Flip) => (over(p.spot) ? 1e6 : 0);
+      const far = (p: Flip) => (held && p.spot === held && !over(held) ? -1 : last(p) + (from ? travel(from, p, room, vertical) : 0));
       options = [...options].sort((a, b) => far(a) - far(b));
       away = false;
     } else {
@@ -605,12 +717,14 @@ export function separate(claims: Claim[]): Flip[] {
     if (!pick) {
       let least = Infinity;
       for (const p of options) {
-        const a = area(p, GAP);
+        const a = area(p, GAP, true);
         if (a < least - 0.5) [least, pick] = [a, p];
       }
+      taken.forEach((t, k) => overlap(footprint(pick!, room, vertical), t, GAP) > 0 && crowd[k]++);
     }
     chosen[i] = pick!;
     taken.push(footprint(pick!, room, vertical));
+    crowd.push(0);
   }
   return chosen;
 }
@@ -671,13 +785,20 @@ function wake(cursor: CursorState) {
   schedule();
 }
 let listening = false;
+// The visible area changed: labels may need to flip.
+const wakeAll = () => all.forEach(wake);
 function listen() {
   if (listening) return;
   listening = true;
-  // The visible area changed: labels may need to flip.
-  const wakeAll = () => all.forEach(wake);
   addEventListener('resize', wakeAll);
   addEventListener('scroll', wakeAll, {passive: true, capture: true});
+}
+/** The last cursor is gone: leave nothing behind on the window. */
+function unlisten() {
+  if (!listening) return;
+  listening = false;
+  removeEventListener('resize', wakeAll);
+  removeEventListener('scroll', wakeAll, {capture: true});
 }
 
 const DESIGNS: Record<CursorDesign, (styles: StyleRoot) => Design> = {live: liveDesign, buddy: buddyDesign, island: islandDesign};
@@ -689,6 +810,7 @@ let paletteNext = 0;
 /** The default `speed`: a little calmer than the designs' own pace. */
 const SPEED = 0.75;
 
+/** @internal */
 export interface Spring {
   x: number;
   y: number;
@@ -708,7 +830,10 @@ function spring(s: Spring, tx: number, ty: number, omega: number, zeta: number, 
   }
 }
 
-/** A cursor's motion state: the point it eases toward, its tip and the floating body (null before its first frame). */
+/**
+ * A cursor's motion state: the point it eases toward, its tip and the floating body (null before its first frame).
+ * @internal
+ */
 export interface MotionState {
   aim: Spring;
   tip: Spring;
@@ -722,6 +847,7 @@ export interface MotionState {
  * of the motion has gone non-finite, put it back at rest where the tip was
  * (else where it was going, else the middle of `bounds`, else the origin)
  * and say so; finite motion is left alone.
+ * @internal
  */
 export function recoverMotion(m: MotionState, bounds: Bounds | null): boolean {
   const {aim, tip, goal, body} = m;
@@ -744,10 +870,14 @@ class Mark {
   readonly element: HTMLElement;
   private box: Box | null = null;
   private written = '';
+  private timer = 0;
+  /** `clear` was called (it may still be fading). */
   cleared = false;
 
   constructor(
     readonly layer: Layer,
+    /** The cursor's set of marks, left on removal. */
+    private readonly owner: Set<Mark>,
     public target: Target,
     color: string,
   ) {
@@ -762,12 +892,28 @@ class Mark {
   }
 
   measure() {
+    // An element that left the page isn't coming back: fade out where it was.
+    // (A function or virtual target returning null may be back next frame.)
+    if (this.target instanceof Element && !this.target.isConnected) {
+      this.clear();
+      return;
+    }
     try {
       this.box = this.layer.element.isConnected ? resolveBox(this.target, frameOf(this.layer)) : null;
     } catch (error) {
       warnOnce(`a highlight's target threw, hiding it: ${error instanceof Error ? error.message : String(error)}`);
       this.box = null;
     }
+  }
+
+  /** Fade out (after `delay` seconds) and remove. */
+  clear(delay = 0) {
+    if (this.cleared) return;
+    this.cleared = true;
+    this.timer = window.setTimeout(() => {
+      this.element.classList.add('pc-out');
+      this.timer = window.setTimeout(() => this.remove(), 520);
+    }, delay * 1000);
   }
 
   apply() {
@@ -787,7 +933,9 @@ class Mark {
 
   remove() {
     this.cleared = true;
+    clearTimeout(this.timer);
     marks.delete(this);
+    this.owner.delete(this);
     this.element.remove();
   }
 }
@@ -813,7 +961,7 @@ class CursorState {
   private tip: Spring;
   private body: Spring | null = null;
   private goal: {x: number; y: number};
-  private target: Target | null = null;
+  target: Target | null = null;
   private targetBox: Box | null = null;
   private frame: Frame | null = null;
   private room = {x: 0, y: 0, up: 0};
@@ -1002,8 +1150,14 @@ class CursorState {
     if (this.disposed || !this.frame) return null;
     if (this.target && !this.targetBox) {
       // The target is gone: stop following and stay put.
+      const lost = this.target;
       this.target = null;
       this.finish('lost');
+      try {
+        this.options.onLost?.(lost);
+      } catch (error) {
+        warnOnce(`onLost threw: ${error instanceof Error ? error.message : String(error)}`);
+      }
     }
     const options = spots(this.targetBox ? null : this.goal, this.targetBox, this.frame.bounds, this.room, this.design.vertical, this.flip);
     // Hidden, it takes its best spot and leaves room for the others.
@@ -1195,7 +1349,8 @@ class CursorState {
       const [n, m] = next.step;
       next = finite(n, m) && m >= 1 ? {...next, step: [clamp(Math.round(n), 1, Math.round(m)), Math.round(m)]} : {...next, step: undefined};
     }
-    if (next && next.progress != null && !finite(next.progress)) next = {...next, progress: null};
+    // NaN is no progress; anything else stays on the bar.
+    if (next && next.progress != null) next = {...next, progress: finite(next.progress) ? clamp(next.progress, 0, 1) : null};
     this.view.status = next;
     // A new status (or clearing it) ends a finished message still showing.
     this.view.done = null;
@@ -1295,7 +1450,7 @@ class CursorState {
 
   highlight(target: Target, options: HighlightOptions = {}): Highlight {
     if (this.disposed) return {update() {}, clear() {}};
-    const mark = new Mark(this.layer, target, this.color);
+    const mark = new Mark(this.layer, this.highlights, target, this.color);
     const apply = (opts: HighlightOptions) => {
       mark.element.classList.toggle('pc-busy', opts.busy !== false);
       mark.element.style.setProperty('--pc-r', `${opts.radius ?? 6}px`);
@@ -1306,24 +1461,13 @@ class CursorState {
     mark.measure();
     mark.apply();
     schedule();
-    let timer = 0;
     return {
       update(next, opts) {
         if (mark.cleared) return;
         mark.target = next;
         if (opts) apply(opts);
       },
-      clear: (delay = 0) => {
-        if (mark.cleared) return;
-        clearTimeout(timer);
-        timer = window.setTimeout(() => {
-          mark.element.classList.add('pc-out');
-          timer = window.setTimeout(() => {
-            mark.remove();
-            this.highlights.delete(mark);
-          }, 520);
-        }, delay * 1000);
-      },
+      clear: delay => mark.clear(delay),
     };
   }
 
@@ -1347,6 +1491,7 @@ class CursorState {
     this.finish('disposed');
     all.delete(this);
     awake.delete(this);
+    if (!all.size) unlisten();
     clearTimeout(this.sayTimer);
     clearTimeout(this.doneTimer);
     for (const mark of this.highlights) mark.remove();
@@ -1364,6 +1509,9 @@ class CursorState {
  * `null` for `three` to use only the pointer and label, without three.js.
  */
 export function createPlushieCursor(three: ThreeModule | null, options: PlushieCursorOptions): PlushieCursor {
+  if (typeof document === 'undefined') {
+    throw new Error("@plushies/cursors: createPlushieCursor needs a browser (document is not defined). Call it after mount, e.g. in a 'use client' component's effect.");
+  }
   const state = new CursorState(three, options);
   const unlessDisposed = (run: () => void) => {
     if (!state.disposed) run();
@@ -1375,6 +1523,9 @@ export function createPlushieCursor(three: ThreeModule | null, options: PlushieC
     },
     get design() {
       return state.design.kind;
+    },
+    get target() {
+      return state.target;
     },
     moveTo: (x, y) => state.moveTo(x, y),
     pointAt: target => state.pointAt(target),

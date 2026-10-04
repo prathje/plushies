@@ -4,8 +4,8 @@
  * its back that grows into a chat bubble (squared corner toward the tip)
  * while it works, and the sparkle's twinkling glints beside the plushie.
  */
-import type {CursorView, Design} from '../design';
-import {CHECK_ICON, clearText, el, injectStyle, morph, roundedPath, svg, swapText, type StyleRoot} from '../dom';
+import type {CursorView, Design} from '../design.js';
+import {CHECK_ICON, clearText, el, finalSize, injectStyle, morph, roundedPath, svg, swapText, type StyleRoot} from '../dom.js';
 
 /** The editor's pointer: an arrowhead with no tail, back corners rounded to match the pill. */
 const ARROW = roundedPath([
@@ -88,7 +88,10 @@ export function liveDesign(styles: StyleRoot): Design {
     motion: {tip: 16, body: 13, damping: 0.68, bob: 1.5, hop: 14, leash: 24},
     vertical: 1,
     // The plushie floats above the tip, the label hangs below it.
-    room: bare => ({x: 10 + box.offsetWidth + 6, y: 10 + box.offsetHeight + 6, up: bare ? 4 : 15 + SIZE / 2 + 2}),
+    room(bare) {
+      const {width, height} = finalSize(box);
+      return {x: 10 + width + 6, y: 10 + height + 6, up: bare ? 4 : 15 + SIZE / 2 + 2};
+    },
     render(view: CursorView) {
       const s = view.status;
       const message = view.said ?? view.done ?? s?.text ?? null;

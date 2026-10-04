@@ -32,7 +32,7 @@ export {
   plushieOutline,
 } from './index.js';
 export type * from './index.js';
-export {easeIn, easeInOut, easeOut} from './viewer.js';
+export {easeIn, easeInOut, easeOut, hasSoftwareWebGL} from './viewer.js';
 export type {Easing, PlushieViewer, ViewerLook, ViewerOptions} from './viewer.js';
 export {THREE};
 
