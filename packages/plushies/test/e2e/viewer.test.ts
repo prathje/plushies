@@ -27,6 +27,14 @@ async function open(): Promise<{page: Page; logs: string[]}> {
   chrome = await launchChromium();
   const page = await chrome.browser.newPage();
   page.setDefaultTimeout(60_000);
+  // evaluate() has no timeout of its own: a wedged renderer (it happens on the
+  // CI runner) would hang the test past its budget and past the second try.
+  const evaluate = page.evaluate.bind(page);
+  page.evaluate = ((fn: unknown, arg?: unknown) =>
+    Promise.race([
+      evaluate(fn as never, arg),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('evaluate: no answer from the page in 60 s')), 60_000)),
+    ])) as typeof page.evaluate;
   const logs: string[] = [];
   page.on('pageerror', e => logs.push(`error: ${e.message}`));
   page.on('console', m => logs.push(`${m.type()}: ${m.text()}`));
