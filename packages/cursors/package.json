@@ -1,6 +1,6 @@
 {
   "name": "@plushies/cursors",
-  "version": "0.1.0-alpha.0",
+  "version": "0.1.0-alpha.1",
   "description": "Floating plushie cursors for AI helpers: a plush character with its own pointer, name tag and a live status box.",
   "license": "MIT",
   "author": "Patrick Rathje",
