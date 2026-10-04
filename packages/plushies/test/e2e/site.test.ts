@@ -101,30 +101,41 @@ test('phone layout has no sideways scroll', async () => {
 
 // --- The cursor demo -----------------------------------------------------------
 
-for (const design of ['live', 'buddy', 'island', 'mixed']) {
-  test(`${design}: the helpers mount and get to work`, async () => {
-    const {page, errors} = await browser.page(`/_site/?design=${design}`, {width: 1300, height: 900});
+// One page per group, switching with the controls: every page load mounts
+// three plushies, which is what wears SwiftShader down.
+test('every design: the helpers mount and get to work', async () => {
+  const {page, errors} = await browser.page('/_site/?design=live', {width: 1300, height: 900});
+  await helpersMounted(page);
+  await helpersAtWork(page);
+  for (const design of ['live', 'buddy', 'island', 'mixed']) {
+    if (design !== 'live') await page.click(`#designs [data-design=${design}]`);
+    const want = design === 'mixed' ? ['live', 'buddy', 'island'] : [design, design, design];
+    await page.waitForFunction(want => [...document.querySelectorAll('.pc-cursor')].map(e => (e as HTMLElement).dataset.design).join() === want.join(), want, {timeout: 30_000});
     await helpersMounted(page);
-    const designs = await page.$$eval('.pc-cursor', els => els.map(e => (e as HTMLElement).dataset.design));
-    expect(designs).toEqual(design === 'mixed' ? ['live', 'buddy', 'island'] : [design, design, design]);
     await helpersAtWork(page);
-    expect(errors()).toEqual([]);
-    await page.close();
-  }, 180_000);
-}
+  }
+  expect(errors()).toEqual([]);
+  await page.close();
+}, 180_000);
 
-for (const scene of ['design', 'website', 'sheet', 'doc', 'pipeline']) {
-  test(`${scene}: the helpers work in this use case`, async () => {
-    const {page, errors} = await browser.page(`/_site/?scene=${scene}`, {width: 1300, height: 900});
-    await helpersMounted(page);
+test('every use case: the helpers work in it', async () => {
+  const {page, errors} = await browser.page('/_site/?scene=design', {width: 1300, height: 900});
+  await helpersMounted(page);
+  for (const scene of ['design', 'website', 'sheet', 'doc', 'pipeline']) {
+    if (scene !== 'design') {
+      await page.click(`#scenes [data-scene=${scene}]`);
+      // The helpers drop the old app's tasks: its glows fade out before new ones show.
+      await page.waitForFunction(() => !document.querySelector('.pc-mark'), null, {timeout: 5_000});
+    }
     // Only this use case's app shows, and the button says so.
     expect(await page.$$eval('.scene:not([hidden])', els => els.map(e => (e as HTMLElement).dataset.scene))).toEqual([scene]);
     expect(await page.getAttribute(`#scenes [data-scene=${scene}]`, 'aria-checked')).toBe('true');
+    // Within a while someone is busy on it: a status shows and something glows.
     await helpersAtWork(page);
-    expect(errors()).toEqual([]);
-    await page.close();
-  }, 180_000);
-}
+  }
+  expect(errors()).toEqual([]);
+  await page.close();
+}, 180_000);
 
 test('switching the design and the use case keeps the helpers', async () => {
   const {page, errors} = await browser.page('/_site/?kind=ghost&hat=crown#cursors', {width: 1300, height: 900});
