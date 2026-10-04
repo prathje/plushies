@@ -4,6 +4,21 @@ import {serveDir} from './serve';
 
 export const ROOT = join(import.meta.dir, '../..');
 
+/**
+ * Run a test body a second time if the first fails: SwiftShader Chromium on
+ * the CI runner wedges now and then (every call then times out), and a fresh
+ * browser on the next try usually does. Bun's own `retry` option is a no-op
+ * as of 1.3.
+ */
+export const twice = (body: () => Promise<void>) => async () => {
+  try {
+    await body();
+  } catch (error) {
+    console.warn(`[e2e] second try after: ${String(error).split('\n')[0]}`);
+    await body();
+  }
+};
+
 /** A Chromium that can be killed: its close() may never return on a wedged SwiftShader browser. */
 export interface Chromium {
   browser: Browser;

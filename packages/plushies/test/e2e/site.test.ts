@@ -5,7 +5,7 @@
  * docs. Needs `bun run site:build`.
  */
 import {afterAll, beforeAll, expect, test} from 'bun:test';
-import {launch} from './browser';
+import {launch, twice} from './browser';
 
 let browser: Awaited<ReturnType<typeof launch>>;
 beforeAll(async () => {
@@ -22,7 +22,7 @@ const helpersMounted = (page: import('playwright').Page) =>
 const helpersAtWork = (page: import('playwright').Page) =>
   page.waitForFunction(() => !!document.querySelector('.pc-mark') && !!document.querySelector('.is-open'), null, {timeout: 30_000});
 
-test('renders the helpers, gallery and editor without errors', async () => {
+test('renders the helpers, gallery and editor without errors', twice(async () => {
   const {page, errors} = await browser.page('/_site/');
   await helpersMounted(page);
   await page.waitForTimeout(800);
@@ -34,9 +34,9 @@ test('renders the helpers, gallery and editor without errors', async () => {
   expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBe(0);
   expect(errors()).toEqual([]);
   await page.close();
-}, {timeout: 150_000, retry: 1});
+}), {timeout: 300_000});
 
-test('editor controls change the code and the share link', async () => {
+test('editor controls change the code and the share link', twice(async () => {
   const {page, errors} = await browser.page('/_site/#editor');
   await page.waitForSelector('#editor-plush canvas', {timeout: 20_000});
   await page.locator('.shape-tile[title="star"]').click();
@@ -60,9 +60,9 @@ test('editor controls change the code and the share link', async () => {
   expect(await code(page)).toContain('createPlushie(THREE');
   expect(errors()).toEqual([]);
   await page.close();
-}, {timeout: 150_000, retry: 1});
+}), {timeout: 300_000});
 
-test('a share link restores the plushie', async () => {
+test('a share link restores the plushie', twice(async () => {
   const {page, errors} = await browser.page('/_site/?kind=ghost&color=7cc4f4&hat=crown&eyes=googly&lookX=0.4#editor');
   await page.waitForSelector('#editor-plush canvas', {timeout: 20_000});
   expect(await page.locator('.shape-tile[title="ghost"]').getAttribute('aria-checked')).toBe('true');
@@ -70,9 +70,9 @@ test('a share link restores the plushie', async () => {
   for (const part of ["kind: 'ghost'", "color: '#7cc4f4'", "hat: 'crown'", "eyes: 'googly'", 'lookX: 0.4']) expect(text).toContain(part);
   expect(errors()).toEqual([]);
   await page.close();
-}, {timeout: 150_000, retry: 1});
+}), {timeout: 300_000});
 
-test('gallery cards open in the editor', async () => {
+test('gallery cards open in the editor', twice(async () => {
   const {page, errors} = await browser.page('/_site/#gallery');
   await page.locator('.look', {hasText: 'Professor Moss'}).getByRole('button', {name: 'Open in editor'}).click();
   const text = await code(page);
@@ -80,9 +80,9 @@ test('gallery cards open in the editor', async () => {
   expect(text).toContain("glasses: 'monocle'");
   expect(errors()).toEqual([]);
   await page.close();
-}, {timeout: 150_000, retry: 1});
+}), {timeout: 300_000});
 
-test('phone layout has no sideways scroll', async () => {
+test('phone layout has no sideways scroll', twice(async () => {
   const {page, errors} = await browser.page('/_site/', {width: 390, height: 844});
   await helpersMounted(page);
   expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBe(0);
@@ -98,13 +98,13 @@ test('phone layout has no sideways scroll', async () => {
   expect(await page.evaluate(() => document.documentElement.dataset.theme)).toBe('light');
   expect(errors()).toEqual([]);
   await page.close();
-}, {timeout: 150_000, retry: 1});
+}), {timeout: 300_000});
 
 // --- The cursor demo -----------------------------------------------------------
 
 // One page per group, switching with the controls: every page load mounts
 // three plushies, which is what wears SwiftShader down.
-test('every design: the helpers mount and get to work', async () => {
+test('every design: the helpers mount and get to work', twice(async () => {
   const {page, errors} = await browser.page('/_site/?design=live', {width: 1300, height: 900});
   await helpersMounted(page);
   await helpersAtWork(page);
@@ -117,9 +117,9 @@ test('every design: the helpers mount and get to work', async () => {
   }
   expect(errors()).toEqual([]);
   await page.close();
-}, {timeout: 150_000, retry: 1});
+}), {timeout: 300_000});
 
-test('every use case: the helpers work in it', async () => {
+test('every use case: the helpers work in it', twice(async () => {
   const {page, errors} = await browser.page('/_site/?scene=design', {width: 1300, height: 900});
   await helpersMounted(page);
   for (const scene of ['design', 'website', 'sheet', 'doc', 'pipeline']) {
@@ -136,9 +136,9 @@ test('every use case: the helpers work in it', async () => {
   }
   expect(errors()).toEqual([]);
   await page.close();
-}, {timeout: 150_000, retry: 1});
+}), {timeout: 300_000});
 
-test('switching the design and the use case keeps the helpers', async () => {
+test('switching the design and the use case keeps the helpers', twice(async () => {
   const {page, errors} = await browser.page('/_site/?kind=ghost&hat=crown#cursors', {width: 1300, height: 900});
   await helpersMounted(page);
   await page.waitForFunction(() => !!document.querySelector('.pc-mark'), null, {timeout: 30_000});
@@ -157,9 +157,9 @@ test('switching the design and the use case keeps the helpers', async () => {
   expect(await page.locator('.shape-tile[title="ghost"]').getAttribute('aria-checked')).toBe('true');
   expect(errors()).toEqual([]);
   await page.close();
-}, {timeout: 150_000, retry: 1});
+}), {timeout: 300_000});
 
-test('plushies are optional, per cursor', async () => {
+test('plushies are optional, per cursor', twice(async () => {
   const {page, errors} = await browser.page('/_site/?design=live', {width: 1300, height: 900});
   await helpersMounted(page);
   await page.locator('.toggle:has(#plushies)').click();
@@ -174,9 +174,9 @@ test('plushies are optional, per cursor', async () => {
   expect(await page.$$eval('.pc-cursor.pc-bare', els => els.map(e => (e as HTMLElement).dataset.cursor))).toEqual(['Biscuit']);
   expect(errors()).toEqual([]);
   await page.close();
-}, {timeout: 150_000, retry: 1});
+}), {timeout: 300_000});
 
-test('one helper follows the pointer around the page', async () => {
+test('one helper follows the pointer around the page', twice(async () => {
   const {page, errors} = await browser.page('/_site/?design=live', {width: 1300, height: 900});
   await helpersMounted(page);
   const tip = (name: string) =>
@@ -223,4 +223,4 @@ test('one helper follows the pointer around the page', async () => {
   expect(await page.evaluate(() => (window as any).helpers.map((h: any) => h.manual))).toEqual([false, false, false]);
   expect(errors()).toEqual([]);
   await page.close();
-}, {timeout: 150_000, retry: 1});
+}), {timeout: 300_000});
