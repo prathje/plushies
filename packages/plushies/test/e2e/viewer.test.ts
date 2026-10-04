@@ -1,7 +1,7 @@
 /** The drop-in viewer's lifecycle and look handling, from source, in a real browser. */
 import {afterAll, afterEach, beforeAll, expect, test} from 'bun:test';
 import type {Page} from 'playwright';
-import {twice, launchChromium, type Chromium} from './browser';
+import {launchChromium, twice, withDeadline, type Chromium} from './browser';
 import lab from './fixtures/viewer-lab.html';
 
 let server: ReturnType<typeof Bun.serve>;
@@ -25,16 +25,8 @@ async function open(): Promise<{page: Page; logs: string[]}> {
   // A second try after a failed attempt starts from a fresh browser (the old one is stopped, killed if hung).
   await chrome?.stop();
   chrome = await launchChromium();
-  const page = await chrome.browser.newPage();
+  const page = withDeadline(await chrome.browser.newPage());
   page.setDefaultTimeout(60_000);
-  // evaluate() has no timeout of its own: a wedged renderer (it happens on the
-  // CI runner) would hang the test past its budget and past the second try.
-  const evaluate = page.evaluate.bind(page);
-  page.evaluate = ((fn: unknown, arg?: unknown) =>
-    Promise.race([
-      evaluate(fn as never, arg),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('evaluate: no answer from the page in 60 s')), 60_000)),
-    ])) as typeof page.evaluate;
   const logs: string[] = [];
   page.on('pageerror', e => logs.push(`error: ${e.message}`));
   page.on('console', m => logs.push(`${m.type()}: ${m.text()}`));

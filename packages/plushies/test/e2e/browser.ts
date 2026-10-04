@@ -19,6 +19,21 @@ export const twice = (body: () => Promise<void>) => async () => {
   }
 };
 
+/**
+ * Give a page's evaluate() a deadline: Playwright waits on an in-page promise
+ * with no timeout, so a wedged renderer (it happens on the CI runner) would
+ * hang a test past its budget and past its second try.
+ */
+export function withDeadline(page: Page, seconds = 60) {
+  const evaluate = page.evaluate.bind(page);
+  page.evaluate = ((fn: unknown, arg?: unknown) =>
+    Promise.race([
+      evaluate(fn as never, arg),
+      new Promise((_, reject) => setTimeout(() => reject(new Error(`evaluate: no answer from the page in ${seconds} s`)), seconds * 1000)),
+    ])) as typeof page.evaluate;
+  return page;
+}
+
 /** A Chromium that can be killed: its close() may never return on a wedged SwiftShader browser. */
 export interface Chromium {
   browser: Browser;
@@ -92,7 +107,7 @@ export async function launch() {
   return {
     url: (path: string) => new URL(path, server.url).href,
     async page(path: string, viewport = {width: 1280, height: 900}) {
-      const page = await (await fresh()).newPage({viewport});
+      const page = withDeadline(await (await fresh()).newPage({viewport}));
       // SwiftShader WebGL is slow on busy machines: generous waits instead of flakes.
       page.setDefaultTimeout(60_000);
       page.setDefaultNavigationTimeout(90_000);
