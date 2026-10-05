@@ -5,7 +5,7 @@
  * docs. Needs `bun run site:build`.
  */
 import {afterAll, beforeAll, expect, test} from 'bun:test';
-import {launch, twice} from './browser';
+import {attempts, launch} from './browser';
 
 let browser: Awaited<ReturnType<typeof launch>>;
 beforeAll(async () => {
@@ -22,7 +22,7 @@ const helpersMounted = (page: import('playwright').Page) =>
 const helpersAtWork = (page: import('playwright').Page) =>
   page.waitForFunction(() => !!document.querySelector('.pc-mark') && !!document.querySelector('.is-open'), null, {timeout: 30_000});
 
-test('renders the helpers, gallery and editor without errors', twice(async () => {
+test('renders the helpers, gallery and editor without errors', attempts(async () => {
   const {page, errors} = await browser.page('/_site/');
   await helpersMounted(page);
   await page.waitForTimeout(800);
@@ -36,7 +36,7 @@ test('renders the helpers, gallery and editor without errors', twice(async () =>
   await page.close();
 }), {timeout: 300_000});
 
-test('editor controls change the code and the share link', twice(async () => {
+test('editor controls change the code and the share link', attempts(async () => {
   const {page, errors} = await browser.page('/_site/#editor');
   await page.waitForSelector('#editor-plush canvas', {timeout: 20_000});
   await page.locator('.shape-tile[title="star"]').click();
@@ -62,7 +62,7 @@ test('editor controls change the code and the share link', twice(async () => {
   await page.close();
 }), {timeout: 300_000});
 
-test('a share link restores the plushie', twice(async () => {
+test('a share link restores the plushie', attempts(async () => {
   const {page, errors} = await browser.page('/_site/?kind=ghost&color=7cc4f4&hat=crown&eyes=googly&lookX=0.4#editor');
   await page.waitForSelector('#editor-plush canvas', {timeout: 20_000});
   expect(await page.locator('.shape-tile[title="ghost"]').getAttribute('aria-checked')).toBe('true');
@@ -72,7 +72,7 @@ test('a share link restores the plushie', twice(async () => {
   await page.close();
 }), {timeout: 300_000});
 
-test('gallery cards open in the editor', twice(async () => {
+test('gallery cards open in the editor', attempts(async () => {
   const {page, errors} = await browser.page('/_site/#gallery');
   await page.locator('.look', {hasText: 'Professor Moss'}).getByRole('button', {name: 'Open in editor'}).click();
   const text = await code(page);
@@ -82,7 +82,7 @@ test('gallery cards open in the editor', twice(async () => {
   await page.close();
 }), {timeout: 300_000});
 
-test('phone layout has no sideways scroll', twice(async () => {
+test('phone layout has no sideways scroll', attempts(async () => {
   const {page, errors} = await browser.page('/_site/', {width: 390, height: 844});
   await helpersMounted(page);
   expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBe(0);
@@ -104,41 +104,36 @@ test('phone layout has no sideways scroll', twice(async () => {
 
 // One page per group, switching with the controls: every page load mounts
 // three plushies, which is what wears SwiftShader down.
-test('every design: the helpers mount and get to work', twice(async () => {
-  const {page, errors} = await browser.page('/_site/?design=live', {width: 1300, height: 900});
-  await helpersMounted(page);
-  await helpersAtWork(page);
-  for (const design of ['live', 'buddy', 'island', 'mixed']) {
-    if (design !== 'live') await page.click(`#designs [data-design=${design}]`);
+// One page per design and per use case: each is a fresh browser, so a wedged
+// SwiftShader (it happens on the CI runner) costs one short attempt, not a loop.
+for (const design of ['live', 'buddy', 'island', 'mixed']) {
+  test(`design ${design}: the helpers mount and get to work`, attempts(async () => {
+    const {page, errors} = await browser.page(`/_site/?design=${design}`, {width: 1300, height: 900});
     const want = design === 'mixed' ? ['live', 'buddy', 'island'] : [design, design, design];
     await page.waitForFunction(want => [...document.querySelectorAll('.pc-cursor')].map(e => (e as HTMLElement).dataset.design).join() === want.join(), want, {timeout: 30_000});
     await helpersMounted(page);
     await helpersAtWork(page);
-  }
-  expect(errors()).toEqual([]);
-  await page.close();
-}), {timeout: 300_000});
+    expect(await page.getAttribute(`#designs [data-design=${design}]`, 'aria-checked')).toBe('true');
+    expect(errors()).toEqual([]);
+    await page.close();
+  }), {timeout: 300_000});
+}
 
-test('every use case: the helpers work in it', twice(async () => {
-  const {page, errors} = await browser.page('/_site/?scene=design', {width: 1300, height: 900});
-  await helpersMounted(page);
-  for (const scene of ['design', 'website', 'sheet', 'doc', 'pipeline']) {
-    if (scene !== 'design') {
-      await page.click(`#scenes [data-scene=${scene}]`);
-      // The helpers drop the old app's tasks: its glows fade out before new ones show.
-      await page.waitForFunction(() => !document.querySelector('.pc-mark'), null, {timeout: 5_000});
-    }
+for (const scene of ['design', 'website', 'sheet', 'doc', 'pipeline']) {
+  test(`use case ${scene}: the helpers work in it`, attempts(async () => {
+    const {page, errors} = await browser.page(`/_site/?scene=${scene}`, {width: 1300, height: 900});
+    await helpersMounted(page);
     // Only this use case's app shows, and the button says so.
     expect(await page.$$eval('.scene:not([hidden])', els => els.map(e => (e as HTMLElement).dataset.scene))).toEqual([scene]);
     expect(await page.getAttribute(`#scenes [data-scene=${scene}]`, 'aria-checked')).toBe('true');
     // Within a while someone is busy on it: a status shows and something glows.
     await helpersAtWork(page);
-  }
-  expect(errors()).toEqual([]);
-  await page.close();
-}), {timeout: 300_000});
+    expect(errors()).toEqual([]);
+    await page.close();
+  }), {timeout: 300_000});
+}
 
-test('switching the design and the use case keeps the helpers', twice(async () => {
+test('switching the design and the use case keeps the helpers', attempts(async () => {
   const {page, errors} = await browser.page('/_site/?kind=ghost&hat=crown#cursors', {width: 1300, height: 900});
   await helpersMounted(page);
   await page.waitForFunction(() => !!document.querySelector('.pc-mark'), null, {timeout: 30_000});
@@ -159,7 +154,7 @@ test('switching the design and the use case keeps the helpers', twice(async () =
   await page.close();
 }), {timeout: 300_000});
 
-test('plushies are optional, per cursor', twice(async () => {
+test('plushies are optional, per cursor', attempts(async () => {
   const {page, errors} = await browser.page('/_site/?design=live', {width: 1300, height: 900});
   await helpersMounted(page);
   await page.locator('.toggle:has(#plushies)').click();
@@ -176,7 +171,7 @@ test('plushies are optional, per cursor', twice(async () => {
   await page.close();
 }), {timeout: 300_000});
 
-test('one helper follows the pointer around the page', twice(async () => {
+test('one helper follows the pointer around the page', attempts(async () => {
   const {page, errors} = await browser.page('/_site/?design=live', {width: 1300, height: 900});
   await helpersMounted(page);
   const tip = (name: string) =>

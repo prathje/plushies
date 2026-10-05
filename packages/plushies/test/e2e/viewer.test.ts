@@ -1,7 +1,7 @@
 /** The drop-in viewer's lifecycle and look handling, from source, in a real browser. */
 import {afterAll, afterEach, beforeAll, expect, test} from 'bun:test';
 import type {Page} from 'playwright';
-import {launchChromium, twice, withDeadline, type Chromium} from './browser';
+import {attempts, launchChromium, withDeadline, type Chromium} from './browser';
 import lab from './fixtures/viewer-lab.html';
 
 let server: ReturnType<typeof Bun.serve>;
@@ -45,7 +45,7 @@ const PIXELS = `async view => {
   return n;
 }`;
 
-test('a second dispose() leaves the other viewers drawing', twice(async () => {
+test('a second dispose() leaves the other viewers drawing', attempts(async () => {
   const {page, logs} = await open();
   const pixels = await page.evaluate(async src => {
     const w = window as any;
@@ -60,9 +60,9 @@ test('a second dispose() leaves the other viewers drawing', twice(async () => {
   expect(pixels).toBeGreaterThan(5000);
   expect(logs.filter(l => l.startsWith('error'))).toEqual([]);
   await page.close();
-}), {timeout: 180_000});
+}), {timeout: 300_000});
 
-test('dispose() and stop() settle pending tweens', twice(async () => {
+test('dispose() and stop() settle pending tweens', attempts(async () => {
   const {page} = await open();
   const result = await page.evaluate(async () => {
     const w = window as any;
@@ -79,9 +79,9 @@ test('dispose() and stop() settle pending tweens', twice(async () => {
   });
   expect(result).toEqual(['settled', 'settled', 'settled']);
   await page.close();
-}), {timeout: 180_000});
+}), {timeout: 300_000});
 
-test('restyle() merges into the current look', twice(async () => {
+test('restyle() merges into the current look', attempts(async () => {
   const {page} = await open();
   const look = await page.evaluate(() => {
     const w = window as any;
@@ -96,9 +96,9 @@ test('restyle() merges into the current look', twice(async () => {
   expect(look.turn).toBe(10);
   expect(look.color).toBe('#ff0000');
   await page.close();
-}), {timeout: 180_000});
+}), {timeout: 300_000});
 
-test('options keeps colour and fur as given; a new fabric resets the fur', twice(async () => {
+test('options keeps colour and fur as given; a new fabric resets the fur', attempts(async () => {
   const {page} = await open();
   const result = await page.evaluate(() => {
     const w = window as any;
@@ -114,9 +114,9 @@ test('options keeps colour and fur as given; a new fabric resets the fur', twice
   expect(result.furred).toEqual({kind: 'star', color: '#00ff00', fabric: 'felt', fur: 0.2});
   expect(result.pose).toBe(0.2);
   await page.close();
-}), {timeout: 180_000});
+}), {timeout: 300_000});
 
-test('a missing container is a clear error', twice(async () => {
+test('a missing container is a clear error', attempts(async () => {
   const {page} = await open();
   const message = await page.evaluate(() => {
     const w = window as any;
@@ -129,7 +129,7 @@ test('a missing container is a clear error', twice(async () => {
   });
   expect(message).toBe('plushies: mountPlushie needs a container element (got null)');
   await page.close();
-}), {timeout: 180_000});
+}), {timeout: 300_000});
 
 /** Fur shells the body mesh of `view` draws. */
 const SHELLS = `view => {
@@ -141,7 +141,7 @@ const SHELLS = `view => {
   return drawn;
 }`;
 
-test('quality: low caps the pixel ratio at 1 and the fur shells at 6; auto detects software WebGL', twice(async () => {
+test('quality: low caps the pixel ratio at 1 and the fur shells at 6; auto detects software WebGL', attempts(async () => {
   const {page} = await open();
   const result = await page.evaluate(src => {
     const w = window as any;
@@ -173,9 +173,9 @@ test('quality: low caps the pixel ratio at 1 and the fur shells at 6; auto detec
   expect(result.full.look).toEqual({kind: 'circle', fabric: 'shaggy', fur: 0.5});
   expect(result.low.look).toEqual({kind: 'circle', fabric: 'shaggy', fur: 0.5});
   await page.close();
-}), {timeout: 180_000});
+}), {timeout: 300_000});
 
-test('modern CSS colours match their hex', twice(async () => {
+test('modern CSS colours match their hex', attempts(async () => {
   const {page, logs} = await open();
   const same = await page.evaluate(async src => {
     const w = window as any;
@@ -202,7 +202,7 @@ test('modern CSS colours match their hex', twice(async () => {
   await page.close();
 }), {timeout: 240_000});
 
-test('invalid options warn and fall back; NaN poses are ignored', twice(async () => {
+test('invalid options warn and fall back; NaN poses are ignored', attempts(async () => {
   const {page, logs} = await open();
   const pose = await page.evaluate(() => {
     const w = window as any;
@@ -218,9 +218,9 @@ test('invalid options warn and fall back; NaN poses are ignored', twice(async ()
   expect(warnings.some(l => /unknown colour "not-a-colour"/.test(l))).toBe(true);
   expect(warnings.some(l => /lookX must be a finite number/.test(l))).toBe(true);
   await page.close();
-}), {timeout: 180_000});
+}), {timeout: 300_000});
 
-test('chained steps keep their total duration', twice(async () => {
+test('chained steps keep their total duration', attempts(async () => {
   const {page} = await open();
   const {ms, frame} = await page.evaluate(async () => {
     const w = window as any;
@@ -247,9 +247,9 @@ test('chained steps keep their total duration', twice(async () => {
   // frame gap ≤ 500 ms), so on a slower machine there's nothing to check.
   if (frame > 200) return console.warn(`chained steps: ${frame.toFixed(0)} ms frames, skipped`);
   expect(ms).toBeLessThan(1000 + Math.max(250, 1.5 * frame));
-}), {timeout: 180_000});
+}), {timeout: 300_000});
 
-test('stop() halts a performance and the idle gesture where they are', twice(async () => {
+test('stop() halts a performance and the idle gesture where they are', attempts(async () => {
   const {page} = await open();
   const result = await page.evaluate(async () => {
     const w = window as any;
@@ -280,9 +280,9 @@ test('stop() halts a performance and the idle gesture where they are', twice(asy
   expect(result.lid).toBeGreaterThan(0.2);
   expect(result.lidAfter).toBe(result.lid);
   await page.close();
-}), {timeout: 180_000});
+}), {timeout: 300_000});
 
-test('a step chained after a long stall starts now, not back when the stall began', twice(async () => {
+test('a step chained after a long stall starts now, not back when the stall began', attempts(async () => {
   const {page} = await open();
   const ms = await page.evaluate(async () => {
     const w = window as any;
@@ -300,9 +300,9 @@ test('a step chained after a long stall starts now, not back when the stall bega
   // Chained from the first step's end, the 300 ms step would already be over on its first frame.
   expect(ms).toBeGreaterThan(250);
   await page.close();
-}), {timeout: 180_000});
+}), {timeout: 300_000});
 
-test('restyle() with fur or a new fabric settles a running fur tween', twice(async () => {
+test('restyle() with fur or a new fabric settles a running fur tween', attempts(async () => {
   const {page} = await open();
   const fur = await page.evaluate(async () => {
     const w = window as any;
@@ -323,9 +323,9 @@ test('restyle() with fur or a new fabric settles a running fur tween', twice(asy
   expect(fur.given).toBe(0.3);
   expect(fur.fabric).toBe(fur.shaggy);
   await page.close();
-}), {timeout: 180_000});
+}), {timeout: 300_000});
 
-test('translucent, bare-number hsl and `none` colours resolve like their opaque twins', twice(async () => {
+test('translucent, bare-number hsl and `none` colours resolve like their opaque twins', attempts(async () => {
   const {page, logs} = await open();
   const pairs = await page.evaluate(async src => {
     const w = window as any;

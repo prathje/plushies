@@ -5,17 +5,29 @@ import {serveDir} from './serve';
 export const ROOT = join(import.meta.dir, '../..');
 
 /**
- * Run a test body a second time if the first fails: SwiftShader Chromium on
- * the CI runner wedges now and then (every call then times out), and a fresh
- * browser on the next try usually does. Bun's own `retry` option is a no-op
- * as of 1.3.
+ * Run a test body again if it fails, up to `tries` times, each attempt within
+ * `seconds`: SwiftShader Chromium on the CI runner wedges now and then (every
+ * call then hangs to its own timeout, and a long test wears through its whole
+ * budget without ever failing), and a fresh browser on the next try usually
+ * does. The deadline is what makes the next try happen in time; the body's
+ * next `browser.page()` tears the wedged browser down. Bun's own `retry`
+ * option is a no-op as of 1.3. Size the test's timeout for tries × seconds.
  */
-export const twice = (body: () => Promise<void>) => async () => {
-  try {
-    await body();
-  } catch (error) {
-    console.warn(`[e2e] second try after: ${String(error).split('\n')[0]}`);
-    await body();
+export const attempts = (body: () => Promise<void>, tries = 3, seconds = 90) => async () => {
+  for (let n = 1; ; n++) {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      const run = body();
+      // The abandoned attempt rejects later, against a browser that is gone: not an unhandled rejection.
+      run.catch(() => {});
+      await Promise.race([run, new Promise<never>((_, reject) => (timer = setTimeout(() => reject(new Error(`attempt took longer than ${seconds} s`)), seconds * 1000)))]);
+      return;
+    } catch (error) {
+      if (n >= tries) throw error;
+      console.warn(`[e2e] try ${n + 1} after: ${String(error).split('\n')[0]}`);
+    } finally {
+      clearTimeout(timer);
+    }
   }
 };
 
@@ -48,7 +60,12 @@ export interface Chromium {
  * waiting on it hung to its timeout without a word.
  */
 export async function launchChromium(): Promise<Chromium> {
-  const options = {args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--disable-dev-shm-usage'], timeout: 30_000};
+  const options = {
+    args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--disable-dev-shm-usage'],
+    timeout: 30_000,
+    // On CI, Chromium's own stderr goes to the log: a GPU process that crashed or was killed says so there.
+    ...(process.env.CI ? {env: {...process.env, DEBUG: 'pw:browser'}} : {}),
+  };
   // A launch right after a browser went down has failed to connect on the runner: give it a second try.
   const browser = await chromium.launch(options).catch(async error => {
     console.warn(`[e2e] Chromium did not launch (${String(error).split('\n')[0]}); trying again`);
