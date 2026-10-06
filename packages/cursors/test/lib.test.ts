@@ -101,6 +101,63 @@ test('gestures settle when interrupted, and the idle loop comes back', async () 
   await page.close();
 }, 90_000);
 
+test('a status set or cleared mid-wobble, a new plushie and a second hop all ease instead of jumping', async () => {
+  const {page, logs} = await open();
+  const result = await page.evaluate(async () => {
+    const w = window as any;
+    const c = w.createPlushieCursor(w.THREE, {name: 'A', container: document.querySelector('#a'), x: 200, y: 200});
+    await c.moveTo(220, 220);
+    // The lean's steepest change per millisecond. The wobble itself moves at most
+    // 0.03°/ms and its fade adds 0.03°/ms; a snap is a few degrees in one frame.
+    let steepest = 0;
+    let frames = 0;
+    let last: {t: number; lean: number} | null = null;
+    const sample = () => {
+      const t = performance.now();
+      const lean = c.viewer.plushie.pose.lean;
+      if (last && t > last.t) steepest = Math.max(steepest, Math.abs(lean - last.lean) / (t - last.t));
+      last = {t, lean};
+      frames++;
+    };
+    const watch = (ms: number) =>
+      new Promise<void>(resolve => {
+        const end = performance.now() + ms;
+        const f = () => {
+          sample();
+          if (performance.now() < end) requestAnimationFrame(f);
+          else resolve();
+        };
+        requestAnimationFrame(f);
+      });
+    await watch(300);
+    c.status('Working on it');
+    await watch(700);
+    c.status(null);
+    await watch(300);
+    c.status('Again');
+    await watch(400);
+    // A new plushie starts at rest and the wobble fades in on it.
+    last = null;
+    c.setDesign('buddy');
+    await watch(400);
+    // A second hop takes off from where the first left the canvas.
+    const host = c.viewer.canvas.parentElement as HTMLElement;
+    void c.done('one');
+    await new Promise(r => setTimeout(r, 250));
+    const before = getComputedStyle(host).translate;
+    void c.done('two');
+    const after = getComputedStyle(host).translate;
+    return {steepest, frames, before, after};
+  });
+  expect(result.frames).toBeGreaterThan(20);
+  expect(result.steepest).toBeLessThan(0.12);
+  // Mid-air before the second hop, and still there right after it starts.
+  expect(result.before).not.toBe('0px 0px');
+  expect(result.after).toBe(result.before);
+  expect(errors(logs)).toEqual([]);
+  await page.close();
+}, 90_000);
+
 test('scaled containers, canvases and other containers line up', async () => {
   const {page, logs} = await open();
   const r = await page.evaluate(async () => {

@@ -974,6 +974,14 @@ class CursorState {
   private gestures = new WeakMap<PlushieViewer, number>();
   private plushSize = 0;
   private lastPose = {lookX: 0, lookY: 0, lean: 0, turn: 0};
+  /** How much of the busy wobble shows (0..1): it fades in and out so a status change mid-swing doesn't jump the lean. */
+  private sway = 0;
+  /**
+   * The body's velocity, smoothed over a few frames, for what expresses it (the
+   * plushie's lean and turn, a design's string and tag): the leash can zero the
+   * real velocity in one frame, and that shouldn't snap them.
+   */
+  private vel = {x: 0, y: 0};
   private written = {tip: '', body: ''};
   private highlights = new Set<Mark>();
   private announcer: HTMLElement;
@@ -1037,7 +1045,7 @@ class CursorState {
     this.design = DESIGNS[kind](this.layer.styles);
     this.element.dataset.design = kind;
     this.element.append(this.design.root);
-    this.body = null;
+    // The floating part keeps its place and glides to the new design's rest spot.
     this.flip = undefined;
     this.written = {tip: '', body: ''};
     this.mountPlushie();
@@ -1083,6 +1091,9 @@ class CursorState {
       idle: this.options.idle !== false && !reducedMotion(),
     });
     this.plushSize = this.design.plushHost.offsetWidth || 48;
+    // A fresh plushie starts at rest: the wobble fades in on it, and the pose is written from zero.
+    this.sway = 0;
+    this.lastPose = {lookX: 0, lookY: 0, lean: 0, turn: 0};
   }
 
   setPlushie(on: boolean) {
@@ -1216,6 +1227,9 @@ class CursorState {
 
     if (!this.sane(dt, next)) return;
 
+    const ease = 1 - Math.exp(-dt / 0.06);
+    this.vel.x += (this.body.vx - this.vel.x) * ease;
+    this.vel.y += (this.body.vy - this.vel.y) * ease;
     const bob = motion.bob * Math.sin((now / 1000) * Math.PI * 0.9);
     const bx = this.body.x - this.tip.x;
     const by = this.body.y - this.tip.y + bob;
@@ -1224,10 +1238,10 @@ class CursorState {
     if (tip !== this.written.tip) this.element.style.transform = this.written.tip = tip;
     if (body !== this.written.body) {
       this.design.body.style.transform = this.written.body = body;
-      this.design.frame?.({x: bx, y: by, vx: this.body.vx, vy: this.body.vy}, {x: next.flipX, y: next.flipY});
+      this.design.frame?.({x: bx, y: by, vx: this.vel.x, vy: this.vel.y}, {x: next.flipX, y: next.flipY});
     }
 
-    this.pose(box, now);
+    this.pose(box, now, dt);
 
     if (this.move && this.settled()) this.finish('arrived');
   }
@@ -1256,7 +1270,7 @@ class CursorState {
     // can be seen; showing it again or scrolling it into view wakes it.
     if (!this.hidden && this.layer.visible) {
       if (this.target || this.motion.bob) return false;
-      if (this.viewer && this.view.status && this.view.status.busy !== false) return false;
+      if (this.viewer && (this.busy || this.sway > 0)) return false;
     }
     const body = this.body;
     return this.settled() && Math.hypot(this.aim.vx, this.aim.vy) < 1 && (!body || Math.hypot(body.vx, body.vy) < 1);
@@ -1266,18 +1280,29 @@ class CursorState {
    * The plushie leans into its motion and turns toward where it's going,
    * looks at what it points at, and wobbles while it works.
    */
-  private pose(box: Box | null, now: number) {
+  private get busy() {
+    return !!this.view.status && this.view.status.busy !== false;
+  }
+
+  private pose(box: Box | null, now: number, dt: number) {
     if (!this.viewer) return;
     const body = this.body!;
     const size = this.plushSize;
-    const busy = !!this.view.status && this.view.status.busy !== false;
-    const wobble = busy && !reducedMotion() ? 5 * Math.sin(now / 160) : 0;
-    const lean = clamp(body.vx * 0.022, -16, 16) + wobble;
-    const turn = clamp(body.vx * 0.04, -32, 32);
+    const busy = this.busy;
+    // The wobble swings on a clock that keeps running, and its amplitude
+    // eases between 0 and 1: a status set or cleared mid-swing fades it
+    // instead of dropping the lean to (or from) the rest pose in one frame.
+    const swayTo = busy && !reducedMotion() ? 1 : 0;
+    this.sway += (swayTo - this.sway) * (1 - Math.exp(-dt / 0.18));
+    if (Math.abs(swayTo - this.sway) < 0.01) this.sway = swayTo;
+    const wobble = this.sway * 5 * Math.sin(now / 160);
+    const {x: vx, y: vy} = this.vel;
+    const lean = clamp(vx * 0.022, -16, 16) + wobble;
+    const turn = clamp(vx * 0.04, -32, 32);
     const focus = box ? {x: box.left + box.width / 2, y: box.top + box.height / 2} : this.goal;
     const dx = focus.x - body.x;
     const dy = focus.y - body.y;
-    const moving = Math.hypot(body.vx, body.vy) > 30;
+    const moving = Math.hypot(vx, vy) > 30;
     const pose: Partial<typeof this.lastPose> = {};
     if (Math.abs(lean - this.lastPose.lean) > 0.05) pose.lean = this.lastPose.lean = lean;
     if (Math.abs(turn - this.lastPose.turn) > 0.1) pose.turn = this.lastPose.turn = turn;
@@ -1286,9 +1311,13 @@ class CursorState {
       const reach = size * 2.2;
       const lookX = clamp(dx / reach, -1, 1);
       const lookY = clamp(dy / reach, -1, 1);
-      if (Math.abs(lookX - this.viewer.plushie.pose.lookX) > 0.02 || Math.abs(lookY - this.viewer.plushie.pose.lookY) > 0.02) {
-        pose.lookX = lookX;
-        pose.lookY = lookY;
+      // Ease toward the focus from wherever the eyes are (an idle glance,
+      // the last target), so taking them over doesn't snap them.
+      const {lookX: fromX, lookY: fromY} = this.viewer.plushie.pose;
+      if (Math.abs(lookX - fromX) > 0.02 || Math.abs(lookY - fromY) > 0.02) {
+        const k = 1 - Math.exp(-dt / 0.1);
+        pose.lookX = fromX + (lookX - fromX) * k;
+        pose.lookY = fromY + (lookY - fromY) * k;
       }
     }
     if (Object.keys(pose).length) this.viewer.set(pose);
@@ -1433,9 +1462,12 @@ class CursorState {
     const to = viewer.to;
     await to({squash: 0.4}, 0.16, easeOut);
     if (height) {
+      // A jump before the last one has landed takes off from where the canvas is, not from the ground.
+      const from = getComputedStyle(host).translate;
+      for (const running of host.getAnimations()) running.cancel();
       host.animate(
         [
-          {translate: '0 0', easing: 'cubic-bezier(.2, .7, .35, 1)'},
+          {translate: from && from !== 'none' ? from : '0 0', easing: 'cubic-bezier(.2, .7, .35, 1)'},
           {translate: `0 ${-height}px`, offset: 0.45, easing: 'cubic-bezier(.6, 0, .8, .4)'},
           {translate: '0 0'},
         ],
