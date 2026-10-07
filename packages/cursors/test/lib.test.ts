@@ -6,12 +6,12 @@ import lab from './fixtures/lab.html';
 let server: ReturnType<typeof Bun.serve>;
 let browser: Browser;
 beforeAll(async () => {
-  server = Bun.serve({port: 0, routes: {'/': lab}});
+  server = Bun.serve({port: 0, routes: {'/': lab, '/favicon.ico': new Response(null, {status: 204})}});
   // WebGL on the CPU: headless SwiftShader, or with E2E_GL=mesa a headed browser on the
   // system's GL (Mesa llvmpipe under xvfb on CI, where SwiftShader wedges now and then).
   browser = await chromium.launch(
     process.env.E2E_GL === 'mesa'
-      ? {headless: false, args: ['--use-angle=gl', '--ignore-gpu-blocklist']}
+      ? {headless: false, args: ['--use-angle=gl', '--ignore-gpu-blocklist', '--hide-scrollbars']}
       : {args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader']},
   );
 });

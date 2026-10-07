@@ -8,6 +8,7 @@ export function serveDir(dir: string, port = 0) {
       let path = normalize(decodeURIComponent(new URL(request.url).pathname));
       if (path.includes('..')) return new Response('nope', {status: 400});
       if (path.endsWith('/')) path += 'index.html';
+      if (path === '/favicon.ico') return new Response(null, {status: 204});
       const file = Bun.file(join(dir, path));
       return (await file.exists()) ? new Response(file) : new Response('not found', {status: 404});
     },

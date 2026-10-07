@@ -15,7 +15,7 @@ export const MESA = process.env.E2E_GL === 'mesa';
 /** The ANGLE backend flag; also how a wedged browser of ours is told apart from any other Chromium. */
 const ANGLE = MESA ? '--use-angle=gl' : '--use-angle=swiftshader';
 export const launchOptions = MESA
-  ? {headless: false, args: [ANGLE, '--ignore-gpu-blocklist', '--disable-dev-shm-usage']}
+  ? {headless: false, args: [ANGLE, '--ignore-gpu-blocklist', '--hide-scrollbars', '--disable-dev-shm-usage']}
   : {headless: true, args: [ANGLE, '--enable-unsafe-swiftshader', '--disable-dev-shm-usage']};
 
 let reported = false;
