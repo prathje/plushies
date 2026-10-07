@@ -34,7 +34,9 @@ jobs:
         run: bun run site:build
 
       - name: Install Chromium
-        run: bunx playwright install --with-deps chromium
+        # The workspace's own Playwright: bunx fetches the latest release instead, and
+        # its browser build is not the one the tests' Playwright looks for.
+        run: bun run --cwd packages/plushies playwright install --with-deps chromium
       - name: Browser tests (plushies builds + the site, cursor demo included)
         run: bun run --cwd packages/plushies test:e2e
       - name: Browser tests (cursors lib)
