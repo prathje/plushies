@@ -109,11 +109,13 @@ test('a status set or cleared mid-wobble, a new plushie and a second hop all eas
     await c.moveTo(220, 220);
     // The lean's steepest change per millisecond. The wobble itself moves at most
     // 0.03°/ms and its fade adds 0.03°/ms; a snap is a few degrees in one frame.
+    // Time is the frame's own: the ticker writes the pose on it, and on a loaded
+    // machine frames run late and bunch up, so the wall clock between two
+    // callbacks says nothing about how far the pose was meant to move.
     let steepest = 0;
     let frames = 0;
     let last: {t: number; lean: number} | null = null;
-    const sample = () => {
-      const t = performance.now();
+    const sample = (t: number) => {
       const lean = c.viewer.plushie.pose.lean;
       if (last && t > last.t) steepest = Math.max(steepest, Math.abs(lean - last.lean) / (t - last.t));
       last = {t, lean};
@@ -122,8 +124,8 @@ test('a status set or cleared mid-wobble, a new plushie and a second hop all eas
     const watch = (ms: number) =>
       new Promise<void>(resolve => {
         const end = performance.now() + ms;
-        const f = () => {
-          sample();
+        const f = (t: number) => {
+          sample(t);
           if (performance.now() < end) requestAnimationFrame(f);
           else resolve();
         };
@@ -167,9 +169,13 @@ test('scaled containers, canvases and other containers line up', async () => {
     const scaled = document.querySelector('#scaled') as HTMLElement;
     const s = w.createPlushieCursor(null, {name: 'S', container: scaled});
     s.highlight(document.querySelector('#scaled-thing'));
-    // After the entrance animation.
-    await new Promise(r => setTimeout(r, 400));
-    const mark = rect(scaled.querySelector('.pc-mark')!);
+    // After the entrance animation (it scales the mark), however late the frames
+    // come. Only that one: the busy mark breathes forever.
+    const markEl = scaled.querySelector('.pc-mark')!;
+    const entrance = markEl.getAnimations().filter(a => (a as CSSAnimation).animationName === 'pc-mark-in');
+    await Promise.all(entrance.map(a => a.finished));
+    await new Promise(r => requestAnimationFrame(r));
+    const mark = rect(markEl);
     const thing = rect(document.querySelector('#scaled-thing')!);
     // A cursor in #outer pointing at a shape on a bordered, padded canvas in
     // #a, which has a cursor layer of its own (nearer to the canvas).
@@ -275,7 +281,9 @@ test('the ticker sleeps once a still cursor has settled', async () => {
     const w = window as any;
     const c = w.createPlushieCursor(null, {name: 'Still', design: 'island', container: document.querySelector('#a'), x: 40, y: 40});
     await c.moveTo(200, 150);
-    await new Promise(r => setTimeout(r, 400));
+    // The plushie's body trails the tip and needs a few hundred ms of motion to
+    // settle; counted in frames, since the ticker caps a slow frame's step.
+    for (let i = 0; i < 40; i++) await new Promise(r => requestAnimationFrame(r));
     let n = 0;
     const observer = new MutationObserver(list => (n += list.length));
     observer.observe(c.element, {attributes: true, subtree: true});

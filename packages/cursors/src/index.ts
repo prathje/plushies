@@ -739,6 +739,7 @@ const all = new Set<CursorState>();
 const awake = new Set<CursorState>();
 const marks = new Set<Mark>();
 let raf = 0;
+/** The last tick's frame time; 0 while the ticker sleeps. */
 let last = 0;
 /** Run one cursor's or mark's part of a frame; a throw there mustn't stop the others (or the ticker). */
 function guard(run: () => void) {
@@ -752,7 +753,10 @@ function guard(run: () => void) {
 const shownMarks = () => [...marks].filter(mark => mark.layer.visible);
 function tick(now: number) {
   raf = 0;
-  const dt = Math.min(0.064, (now - last) / 1000 || 0.016);
+  // The frame's time comes from the browser, and the first one after a wake can
+  // predate the wake (the frame was already in flight), so it's never read as a
+  // negative step; a stalled frame is capped, so the motion skips rather than leaps.
+  const dt = last ? clamp((now - last) / 1000, 0, 0.064) : 1 / 60;
   last = now;
   // Resting cursors sharing a layer with a moving one take part too: they
   // may have to make room for it (or get their spot back).
@@ -765,6 +769,8 @@ function tick(now: number) {
   for (const mark of shown) guard(() => mark.apply());
   for (const cursor of cursors) guard(() => cursor.resting() && awake.delete(cursor));
   if (!raf && (awake.size || shownMarks().length)) raf = requestAnimationFrame(tick);
+  // Asleep: the next tick, whenever it comes, takes a nominal frame.
+  if (!raf) last = 0;
 }
 /** Spread a layer's cursors so their labels don't cover each other. */
 function arrange(cursors: CursorState[]) {
@@ -777,7 +783,6 @@ function arrange(cursors: CursorState[]) {
 }
 function schedule() {
   if (raf) return;
-  last = performance.now();
   raf = requestAnimationFrame(tick);
 }
 function wake(cursor: CursorState) {
