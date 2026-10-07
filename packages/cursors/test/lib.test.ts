@@ -7,7 +7,13 @@ let server: ReturnType<typeof Bun.serve>;
 let browser: Browser;
 beforeAll(async () => {
   server = Bun.serve({port: 0, routes: {'/': lab}});
-  browser = await chromium.launch({args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader']});
+  // WebGL on the CPU: headless SwiftShader, or with E2E_GL=mesa a headed browser on the
+  // system's GL (Mesa llvmpipe under xvfb on CI, where SwiftShader wedges now and then).
+  browser = await chromium.launch(
+    process.env.E2E_GL === 'mesa'
+      ? {headless: false, args: ['--use-angle=gl', '--ignore-gpu-blocklist']}
+      : {args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader']},
+  );
 });
 afterAll(async () => {
   await browser?.close();

@@ -37,11 +37,21 @@ jobs:
         # The workspace's own Playwright: bunx fetches the latest release instead, and
         # its browser build is not the one the tests' Playwright looks for.
         run: bun run --cwd packages/plushies playwright install --with-deps chromium
+      # WebGL on the CPU through Mesa's llvmpipe in a headed browser on a virtual
+      # display, instead of headless SwiftShader, which wedges on this runner now
+      # and then (see packages/plushies/test/e2e/browser.ts). xvfb and Mesa come
+      # with the runner image and with Playwright's --with-deps.
       - name: Browser tests (plushies builds + the site, cursor demo included)
-        run: bun run --cwd packages/plushies test:e2e
+        run: xvfb-run -a -s "-screen 0 1280x900x24" bun run --cwd packages/plushies test:e2e
+        env:
+          E2E_GL: mesa
+          LIBGL_ALWAYS_SOFTWARE: '1'
       - name: Browser tests (cursors lib)
         if: ${{ !cancelled() }}
-        run: bun run --cwd packages/cursors test:browser
+        run: xvfb-run -a -s "-screen 0 1280x900x24" bun run --cwd packages/cursors test:browser
+        env:
+          E2E_GL: mesa
+          LIBGL_ALWAYS_SOFTWARE: '1'
 
       - uses: actions/upload-artifact@v4
         with:
