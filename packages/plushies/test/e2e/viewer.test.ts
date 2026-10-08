@@ -6,7 +6,7 @@ import lab from './fixtures/viewer-lab.html';
 
 let server: ReturnType<typeof Bun.serve>;
 beforeAll(() => {
-  server = Bun.serve({port: 0, routes: {'/': lab}});
+  server = Bun.serve({port: 0, routes: {'/': lab, '/favicon.ico': new Response(null, {status: 204})}});
 });
 // One browser per test: on a small CI runner, SwiftShader Chromium crashed a few
 // WebGL-heavy tests into a shared browser, failing whichever test came next
